@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
@@ -59,7 +58,7 @@ public final class BaselineCoverageAction extends AbstractFileWriteAction
   }
 
   @Override
-  public String computeKey(ActionKeyContext actionKeyContext) {
+  public String computeKey() {
     return new Fingerprint()
         .addStrings(getInstrumentedFilePathStrings())
         .hexDigestAndReset();

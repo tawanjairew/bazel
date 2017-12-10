@@ -14,7 +14,6 @@
 
 package com.google.devtools.skylark.skylint;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.syntax.ASTNode;
 import com.google.devtools.build.lib.syntax.AbstractComprehension;
 import com.google.devtools.build.lib.syntax.AugmentedAssignmentStatement;
@@ -30,6 +29,7 @@ import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.Parameter;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.SyntaxTreeVisitor;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Map.Entry;

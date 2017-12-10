@@ -44,9 +44,8 @@
 #include <algorithm>
 #include <chrono>  // NOLINT (gRPC requires this)
 #include <cinttypes>
-#include <mutex>  // NOLINT
+#include <mutex>   // NOLINT
 #include <set>
-#include <sstream>
 #include <string>
 #include <thread>  // NOLINT
 #include <utility>
@@ -353,30 +352,23 @@ static vector<string> GetArgumentArray() {
     die(jvm_args_exit_code, "%s", error.c_str());
   }
 
-  // We put all directories on java.library.path that contain .so/.dll files.
-  set<string> java_library_paths;
-  std::stringstream java_library_path;
-  java_library_path << "-Djava.library.path=";
+  // We put all directories on the java.library.path that contain .so files.
+  string java_library_path = "-Djava.library.path=";
   string real_install_dir =
       GetEmbeddedBinariesRoot(globals->options->install_base);
 
   bool first = true;
   for (const auto &it : globals->extracted_binaries) {
     if (IsSharedLibrary(it)) {
-      string libpath(blaze::PathAsJvmFlag(
-          blaze_util::JoinPath(real_install_dir, blaze_util::Dirname(it))));
-      // Only add the library path if it's not added yet.
-      if (java_library_paths.find(libpath) == java_library_paths.end()) {
-        java_library_paths.insert(libpath);
-        if (!first) {
-          java_library_path << kListSeparator;
-        }
-        first = false;
-        java_library_path << libpath;
+      if (!first) {
+        java_library_path += kListSeparator;
       }
+      first = false;
+      java_library_path += blaze::PathAsJvmFlag(
+          blaze_util::JoinPath(real_install_dir, blaze_util::Dirname(it)));
     }
   }
-  result.push_back(java_library_path.str());
+  result.push_back(java_library_path);
 
   // Force use of latin1 for file names.
   result.push_back("-Dfile.encoding=ISO-8859-1");
@@ -432,11 +424,6 @@ static vector<string> GetArgumentArray() {
     result.push_back("--deep_execroot");
   } else {
     result.push_back("--nodeep_execroot");
-  }
-  if (globals->options->expand_configs_in_place) {
-    result.push_back("--expand_configs_in_place");
-  } else {
-    result.push_back("--noexpand_configs_in_place");
   }
   if (globals->options->oom_more_eagerly) {
     result.push_back("--experimental_oom_more_eagerly");
@@ -591,7 +578,7 @@ static void VerifyJavaVersionAndSetJvm() {
 }
 
 // Starts the Blaze server.
-static int StartServer(const WorkspaceLayout *workspace_layout,
+static void StartServer(const WorkspaceLayout *workspace_layout,
                         BlazeServerStartup **server_startup) {
   vector<string> jvm_args_vector = GetArgumentArray();
   string argument_string = GetArgumentString(jvm_args_vector);
@@ -616,8 +603,8 @@ static int StartServer(const WorkspaceLayout *workspace_layout,
   // we can still print errors to the terminal.
   GoToWorkspace(workspace_layout);
 
-  return ExecuteDaemon(exe, jvm_args_vector, globals->jvm_log_file, server_dir,
-                       server_startup);
+  ExecuteDaemon(exe, jvm_args_vector, globals->jvm_log_file, server_dir,
+                server_startup);
 }
 
 // Replace this process with blaze in standalone/batch mode.
@@ -747,7 +734,7 @@ static void StartServerAndConnect(const WorkspaceLayout *workspace_layout,
                 globals->options->io_nice_level);
 
   BlazeServerStartup *server_startup;
-  server_pid = StartServer(workspace_layout, &server_startup);
+  StartServer(workspace_layout, &server_startup);
 
   // Give the server two minutes to start up. That's enough to connect with a
   // debugger.
@@ -775,15 +762,17 @@ static void StartServerAndConnect(const WorkspaceLayout *workspace_layout,
     std::this_thread::sleep_until(next_attempt_time);
     if (!server_startup->IsStillAlive()) {
       globals->option_processor->PrintStartupOptionsProvenanceMessage();
-      fprintf(stderr, "\nServer crashed during startup. Now printing '%s':\n",
+      fprintf(stderr,
+              "\nunexpected pipe read status: %s\n"
+              "Server presumed dead. Now printing '%s':\n",
+              blaze_util::GetLastErrorString().c_str(),
               globals->jvm_log_file.c_str());
       WriteFileToStderrOrDie(globals->jvm_log_file.c_str());
       exit(blaze_exit_code::INTERNAL_ERROR);
     }
   }
   die(blaze_exit_code::INTERNAL_ERROR,
-      "\nError: couldn't connect to server (%d) after 120 seconds.",
-      server_pid);
+      "\nError: couldn't connect to server after 120 seconds.");
 }
 
 // A devtools_ijar::ZipExtractorProcessor to extract the files from the blaze
@@ -1288,6 +1277,12 @@ static void PrepareEnvironmentForJvm() {
     // This would override --host_jvm_args
     PrintWarning("ignoring _JAVA_OPTIONS in environment.");
     blaze::UnsetEnv("_JAVA_OPTIONS");
+  }
+
+  if (!blaze::GetEnv("TEST_TMPDIR").empty()) {
+    fprintf(stderr,
+            "INFO: $TEST_TMPDIR defined: output root default is '%s'.\n",
+            globals->options->output_root.c_str());
   }
 
   // TODO(bazel-team):  We've also seen a failure during loading (creating

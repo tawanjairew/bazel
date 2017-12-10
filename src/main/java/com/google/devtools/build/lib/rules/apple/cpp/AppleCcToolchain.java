@@ -17,17 +17,16 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -56,7 +55,7 @@ public class AppleCcToolchain extends CcToolchain {
   public static final String APPLE_SDK_PLATFORM_VALUE_KEY = "apple_sdk_platform_value";
 
   @Override
-  protected void addBuildVariables(RuleContext ruleContext, Variables.Builder variables)
+  protected Map<String, String> getBuildVariables(RuleContext ruleContext)
       throws RuleErrorException {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
@@ -68,44 +67,44 @@ public class AppleCcToolchain extends CcToolchain {
 
     Map<String, String> appleEnv = getEnvironmentBuildVariables(ruleContext);
 
-    variables
-        .addStringVariable(
+    return ImmutableMap.<String, String>builder()
+        .put(
             XCODE_VERSION_KEY,
             XcodeConfig.getXcodeVersion(ruleContext).toStringWithMinimumComponents(2))
-        .addStringVariable(
+        .put(
             IOS_SDK_VERSION_KEY,
             XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.IOS_SIMULATOR)
                 .toStringWithMinimumComponents(2))
-        .addStringVariable(
+        .put(
             MACOS_SDK_VERSION_KEY,
             XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.MACOS)
                 .toStringWithMinimumComponents(2))
-        .addStringVariable(
+        .put(
             TVOS_SDK_VERSION_KEY,
             XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.TVOS_SIMULATOR)
                 .toStringWithMinimumComponents(2))
-        .addStringVariable(
+        .put(
             WATCHOS_SDK_VERSION_KEY,
             XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.WATCHOS_SIMULATOR)
                 .toStringWithMinimumComponents(2))
-        .addStringVariable(SDK_DIR_KEY, AppleToolchain.sdkDir())
-        .addStringVariable(
-            SDK_FRAMEWORK_DIR_KEY, AppleToolchain.sdkFrameworkDir(platform, ruleContext))
-        .addStringVariable(
+        .put(SDK_DIR_KEY, AppleToolchain.sdkDir())
+        .put(SDK_FRAMEWORK_DIR_KEY, AppleToolchain.sdkFrameworkDir(platform, ruleContext))
+        .put(
             PLATFORM_DEVELOPER_FRAMEWORK_DIR,
             AppleToolchain.platformDeveloperFrameworkDir(appleConfiguration))
-        .addStringVariable(
+        .put(
             XCODE_VERISON_OVERRIDE_VALUE_KEY,
             appleEnv.getOrDefault(AppleConfiguration.XCODE_VERSION_ENV_NAME, ""))
-        .addStringVariable(
+        .put(
             APPLE_SDK_VERSION_OVERRIDE_VALUE_KEY,
             appleEnv.getOrDefault(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME, ""))
-        .addStringVariable(
+        .put(
             APPLE_SDK_PLATFORM_VALUE_KEY,
             appleEnv.getOrDefault(AppleConfiguration.APPLE_SDK_PLATFORM_ENV_NAME, ""))
-        .addStringVariable(
+        .put(
             VERSION_MIN_KEY,
-            XcodeConfig.getMinimumOsForPlatformType(ruleContext, platform.getType()).toString());
+            XcodeConfig.getMinimumOsForPlatformType(ruleContext, platform.getType()).toString())
+        .build();
   }
 
   @Override
@@ -119,12 +118,13 @@ public class AppleCcToolchain extends CcToolchain {
 
   private ImmutableMap<String, String> getEnvironmentBuildVariables(RuleContext ruleContext) {
     Map<String, String> builder = new LinkedHashMap<>();
-    XcodeConfigProvider xcodeConfig = XcodeConfigProvider.fromRuleContext(ruleContext);
-    builder.putAll(AppleConfiguration.getXcodeVersionEnv(xcodeConfig.getXcodeVersion()));
-    if (ApplePlatform.isApplePlatform(ruleContext.getConfiguration().getCpu())) {
-      ApplePlatform platform = ApplePlatform.forTargetCpu(ruleContext.getConfiguration().getCpu());
-      builder.putAll(AppleConfiguration.appleTargetPlatformEnv(
-          platform, xcodeConfig.getSdkVersionForPlatform(platform)));
+    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    builder.putAll(appleConfiguration.getAppleHostSystemEnv());
+    if (ApplePlatform.isApplePlatform(cppConfiguration.getTargetCpu())) {
+      builder.putAll(
+          appleConfiguration.appleTargetPlatformEnv(
+              ApplePlatform.forTargetCpu(cppConfiguration.getTargetCpu())));
     }
     return ImmutableMap.copyOf(builder);
   }

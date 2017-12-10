@@ -139,7 +139,6 @@ public class BlazeCommandDispatcherRcoptionsTest {
         new ServerDirectories(scratch.dir("install_base"), scratch.dir("output_base"));
     this.runtime =
         new BlazeRuntime.Builder()
-            .setFileSystem(scratch.getFileSystem())
             .setProductName(productName)
             .setServerDirectories(serverDirectories)
             .setStartupOptionsProvider(

@@ -12,32 +12,32 @@ cc_test(
     name = "windows_jni_test",
     size = "small",
     srcs = select({
-        "//src/conditions:windows": [
+        "//src:windows": [
             "windows/util_test.cc",
             "windows/file_test.cc",
         ],
-        "//src/conditions:windows_msys": [
+        "//src:windows_msys": [
             "windows/util_test.cc",
             "windows/file_test.cc",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
             "windows/util_test.cc",
             "windows/file_test.cc",
         ],
         "//conditions:default": ["dummy_test.cc"],
     }),
     deps = select({
-        "//src/conditions:windows": [
+        "//src:windows": [
             "//src/main/native/windows:lib-file",
             "//src/test/cpp/util:windows_test_util",
             "//third_party:gtest",
         ],
-        "//src/conditions:windows_msys": [
+        "//src:windows_msys": [
             "//src/main/native/windows:lib-file",
             "//src/test/cpp/util:windows_test_util",
             "//third_party:gtest",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
             "//src/main/native/windows:lib-file",
             "//src/test/cpp/util:windows_test_util",
             "//third_party:gtest",
@@ -47,20 +47,3 @@ cc_test(
 )
 
 test_suite(name = "all_tests")
-
-test_suite(
-    name = "windows_tests",
-    tags = [
-        "-no_windows",
-        "-slow",
-    ],
-    visibility = ["//visibility:private"],
-)
-
-test_suite(
-    name = "all_windows_tests",
-    tests = [
-        ":windows_tests",
-    ],
-    visibility = ["//src:__pkg__"],
-)

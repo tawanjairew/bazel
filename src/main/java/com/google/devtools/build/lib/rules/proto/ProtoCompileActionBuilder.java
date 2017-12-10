@@ -31,16 +31,14 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.MakeVariableExpander;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
-import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
-import com.google.devtools.build.lib.analysis.stringtemplate.TemplateExpander;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -193,25 +191,17 @@ public class ProtoCompileActionBuilder {
     @Override
     public String toString() {
       try {
-        return TemplateExpander.expand(
+        return MakeVariableExpander.expand(
             template,
-            new TemplateContext() {
+            new MakeVariableExpander.Context() {
               @Override
-              public String lookupVariable(String name)
-                  throws ExpansionException {
-                CharSequence value = variableValues.get(name);
-                if (value == null) {
-                  throw new ExpansionException(String.format("$(%s) not defined", name));
-                }
-                return value.toString();
-              }
-
-              @Override
-              public String lookupFunction(String name, String param) throws ExpansionException {
-                throw new ExpansionException(String.format("$(%s) not defined", name));
+              public String lookupMakeVariable(String var)
+                  throws MakeVariableExpander.ExpansionException {
+                CharSequence value = variableValues.get(var);
+                return value != null ? value.toString() : var;
               }
             });
-      } catch (ExpansionException e) {
+      } catch (MakeVariableExpander.ExpansionException e) {
         // Squeelch. We don't throw this exception in the lookupMakeVariable implementation above,
         // and we can't report it here anyway, because this code will typically execute in the
         // Execution phase.

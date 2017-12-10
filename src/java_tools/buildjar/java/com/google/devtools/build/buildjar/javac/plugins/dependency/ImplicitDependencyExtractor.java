@@ -19,7 +19,6 @@ import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.util.Context;
 import java.lang.reflect.Field;
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
 import javax.lang.model.util.SimpleTypeVisitor7;
@@ -35,12 +34,12 @@ import javax.tools.JavaFileObject;
 public class ImplicitDependencyExtractor {
 
   /** Set collecting dependencies names, used for the text output (soon to be removed) */
-  private final Set<Path> depsSet;
+  private final Set<String> depsSet;
   /** Map collecting dependency information, used for the proto output */
-  private final Map<Path, Deps.Dependency> depsMap;
+  private final Map<String, Deps.Dependency> depsMap;
 
   private final TypeVisitor typeVisitor = new TypeVisitor();
-  private final Set<Path> platformJars;
+  private final Set<String> platformJars;
 
   /**
    * ImplicitDependencyExtractor does not guarantee any ordering of the reported dependencies.
@@ -48,7 +47,7 @@ public class ImplicitDependencyExtractor {
    * using this information.
    */
   public ImplicitDependencyExtractor(
-      Set<Path> depsSet, Map<Path, Deps.Dependency> depsMap, Set<Path> platformJars) {
+      Set<String> depsSet, Map<String, Deps.Dependency> depsMap, Set<String> platformJars) {
     this.depsSet = depsSet;
     this.depsMap = depsMap;
     this.platformJars = platformJars;
@@ -94,42 +93,42 @@ public class ImplicitDependencyExtractor {
    * @param platformJars classes on javac's bootclasspath
    * @param completed whether the jar was referenced through a completed symbol
    */
-  private void collectJarOf(JavaFileObject reference, Set<Path> platformJars, boolean completed) {
+  private void collectJarOf(JavaFileObject reference, Set<String> platformJars, boolean completed) {
 
-    Path path = getJarPath(reference);
-    if (path == null) {
+    String name = getJarName(reference);
+    if (name == null) {
       return;
     }
 
     // Filter out classes in rt.jar
-    if (platformJars.contains(path)) {
+    if (platformJars.contains(name)) {
       return;
     }
 
-    depsSet.add(path);
-    Deps.Dependency currentDep = depsMap.get(path);
+    depsSet.add(name);
+    Deps.Dependency currentDep = depsMap.get(name);
 
     // If the dep hasn't been recorded we add it to the map
     // If it's been recorded as INCOMPLETE but is now complete we upgrade the dependency
     if (currentDep == null
         || (completed && currentDep.getKind() == Deps.Dependency.Kind.INCOMPLETE)) {
       depsMap.put(
-          path,
+          name,
           Deps.Dependency.newBuilder()
               .setKind(completed ? Deps.Dependency.Kind.IMPLICIT : Deps.Dependency.Kind.INCOMPLETE)
-              .setPath(path.toString())
+              .setPath(name)
               .build());
     }
   }
 
-  public static Path getJarPath(JavaFileObject file) {
+  public static String getJarName(JavaFileObject file) {
     if (file == null) {
       return null;
     }
     try {
       Field field = file.getClass().getDeclaredField("userJarPath");
       field.setAccessible(true);
-      return (Path) field.get(file);
+      return field.get(file).toString();
     } catch (NoSuchFieldException e) {
       return null;
     } catch (ReflectiveOperationException e) {

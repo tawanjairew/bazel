@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.platform;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.platform.ConstraintSettingInfo;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
@@ -125,9 +126,8 @@ public class PlatformTest extends BuildViewTestCase {
     checkError(
         "constraint/overlap",
         "plat_overlap",
-        "Duplicate constraint_values detected: "
-            + "constraint_setting //constraint:basic has "
-            + "[//constraint:foo, //constraint/overlap:bar]",
+        "Duplicate constraint_values for constraint_setting //constraint:basic: "
+            + "//constraint:foo, //constraint/overlap:bar",
         "constraint_value(name = 'bar',",
         "    constraint_setting = '//constraint:basic',",
         "    )",
@@ -146,7 +146,10 @@ public class PlatformTest extends BuildViewTestCase {
         "    constraint_values = [",
         "       '//constraint:foo',",
         "    ],",
-        "    remote_execution_properties = 'foo: val1',",
+        "    remote_execution_properties = {",
+        "        'foo': 'val1',",
+        "        'bar': 'val2',",
+        "    },",
         ")");
 
     ConfiguredTarget platform = getConfiguredTarget("//constraint/remote:plat_remote");
@@ -154,7 +157,8 @@ public class PlatformTest extends BuildViewTestCase {
 
     PlatformInfo provider = PlatformProviderUtils.platform(platform);
     assertThat(provider).isNotNull();
-    assertThat(provider.remoteExecutionProperties()).isEqualTo("foo: val1");
+    assertThat(provider.remoteExecutionProperties())
+        .containsExactlyEntriesIn(ImmutableMap.of("foo", "val1", "bar", "val2"));
   }
 
   @Test

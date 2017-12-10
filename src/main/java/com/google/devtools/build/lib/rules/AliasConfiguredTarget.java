@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -32,6 +31,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.util.Preconditions;
 import javax.annotation.Nullable;
 
 /**
@@ -137,10 +137,6 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
    */
   public ConfiguredTarget getActual() {
     return actual;
-  }
-
-  public Label getOriginalLabel() {
-    return label;
   }
 
   @Override

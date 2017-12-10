@@ -13,23 +13,24 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs.inmemoryfs;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.vfs.FileStatus;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 
 /**
- * This interface defines the function directly supported by the "files" stored in a
- * InMemoryFileSystem. This corresponds to a file or inode in UNIX: it doesn't have a path (it could
- * have many paths due to hard links, or none if it's unlinked, i.e. garbage).
+ * This interface defines the function directly supported by the "files" stored
+ * in a InMemoryFileSystem. This corresponds to a file or inode in UNIX: it
+ * doesn't have a path (it could have many paths due to hard links, or none if
+ * it's unlinked, i.e. garbage).
  *
- * <p>This class is thread-safe: instances may be accessed and modified from concurrent threads.
- * Subclasses must preserve this property.
+ * <p>This class is thread-safe: instances may be accessed and modified from
+ * concurrent threads. Subclasses must preserve this property.
  */
 @ThreadSafe
-public abstract class InMemoryContentInfo implements FileStatus {
+public abstract class InMemoryContentInfo implements ScopeEscapableStatus {
 
   private final Clock clock;
 
@@ -193,6 +194,16 @@ public abstract class InMemoryContentInfo implements FileStatus {
    */
   boolean isExecutable() {
     return isExecutable;
+  }
+
+  @Override
+  public boolean outOfScope() {
+    return false;
+  }
+
+  @Override
+  public PathFragment getEscapingPath() {
+    return null;
   }
 
   /**

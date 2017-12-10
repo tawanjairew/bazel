@@ -13,21 +13,18 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.blobstore;
 
+import com.google.common.io.ByteStreams;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
-import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 
@@ -61,7 +58,7 @@ public final class RestBlobStore implements SimpleBlobStore {
    * @param baseUrl base URL for the remote cache
    * @param poolSize maximum number of simultaneous connections
    */
-  public RestBlobStore(String baseUrl, int poolSize, int timeoutMillis) throws IOException {
+  public RestBlobStore(String baseUrl, int poolSize) throws IOException {
     validateUrl(baseUrl);
     this.baseUrl = baseUrl;
     connMan = new PoolingHttpClientConnectionManager();
@@ -70,12 +67,6 @@ public final class RestBlobStore implements SimpleBlobStore {
     clientFactory = HttpClientBuilder.create();
     clientFactory.setConnectionManager(connMan);
     clientFactory.setConnectionManagerShared(true);
-    clientFactory.setDefaultRequestConfig(RequestConfig.custom()
-        // Timeout to establish a connection.
-        .setConnectTimeout(timeoutMillis)
-        // Timeout between reading data.
-        .setSocketTimeout(timeoutMillis)
-        .build());
   }
 
   @Override
@@ -86,7 +77,7 @@ public final class RestBlobStore implements SimpleBlobStore {
   @Override
   public boolean containsKey(String key) throws IOException {
     HttpClient client = clientFactory.build();
-    HttpHead head = new HttpHead(baseUrl + "/" + CAS_PREFIX + "/" + key);
+    HttpHead head = new HttpHead(baseUrl + "/" + key);
     return client.execute(
         head,
         response -> {
@@ -126,19 +117,22 @@ public final class RestBlobStore implements SimpleBlobStore {
   }
 
   @Override
-  public void put(String key, long length, InputStream in) throws IOException {
-    put(CAS_PREFIX, key, new InputStreamEntity(in, length, ContentType.APPLICATION_OCTET_STREAM));
+  public void put(String key, InputStream in) throws IOException {
+    put(CAS_PREFIX, key, in);
   }
 
   @Override
-  public void putActionResult(String key, byte[] in) throws IOException, InterruptedException {
-    put(ACTION_CACHE_PREFIX, key, new ByteArrayEntity(in, ContentType.APPLICATION_OCTET_STREAM));
+  public void putActionResult(String key, InputStream in) throws IOException, InterruptedException {
+    put(ACTION_CACHE_PREFIX, key, in);
   }
 
-  private void put(String urlPrefix, String key, HttpEntity entity) throws IOException {
+  private void put(String urlPrefix, String key, InputStream in) throws IOException {
     HttpClient client = clientFactory.build();
     HttpPut put = new HttpPut(baseUrl + "/" + urlPrefix + "/" + key);
-    put.setEntity(entity);
+    // For now, upload a byte array instead of a stream, due to Hazelcast crashing on the stream.
+    // See https://github.com/hazelcast/hazelcast/issues/10878.
+    put.setEntity(new ByteArrayEntity(ByteStreams.toByteArray(in)));
+    put.setHeader("Content-Type", "application/octet-stream");
     client.execute(
         put,
         (response) -> {

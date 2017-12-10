@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -56,13 +55,10 @@ public abstract class AbstractFileWriteAction extends AbstractAction {
   }
 
   @Override
-  public final ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public final void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    ActionResult actionResult;
     try {
-      actionResult =
-          ActionResult.create(
-              getStrategy(actionExecutionContext).exec(this, actionExecutionContext));
+      getStrategy(actionExecutionContext).exec(this, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "Writing file for rule '" + Label.print(getOwner().getLabel()) + "'",
@@ -70,7 +66,6 @@ public abstract class AbstractFileWriteAction extends AbstractAction {
           this);
     }
     afterWrite(actionExecutionContext);
-    return actionResult;
   }
 
   /**

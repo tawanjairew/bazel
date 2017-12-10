@@ -17,8 +17,10 @@ package com.google.devtools.build.lib.util;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
+import com.google.devtools.common.options.Converters;
+import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
-import com.google.devtools.common.options.ParsedOptionDescription;
+import com.google.devtools.common.options.UnparsedOptionValueDescription;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -32,16 +34,32 @@ public final class OptionsUtils {
    * Returns a string representation of the non-hidden specified options; option values are
    * shell-escaped.
    */
-  public static String asShellEscapedString(Iterable<ParsedOptionDescription> optionsList) {
+  public static String asShellEscapedString(Iterable<UnparsedOptionValueDescription> optionsList) {
     StringBuilder result = new StringBuilder();
-    for (ParsedOptionDescription option : optionsList) {
+    for (UnparsedOptionValueDescription option : optionsList) {
       if (option.isHidden()) {
         continue;
       }
       if (result.length() != 0) {
         result.append(' ');
       }
-      result.append(option.getCanonicalFormWithValueEscaper(ShellEscaper::escapeString));
+      String value = option.getUnconvertedValue();
+      if (option.isBooleanOption()) {
+        boolean isEnabled = false;
+        try {
+          isEnabled = new Converters.BooleanConverter().convert(value);
+        } catch (OptionsParsingException e) {
+          throw new RuntimeException("Unexpected parsing exception", e);
+        }
+        result
+            .append(isEnabled ? "--" : "--no")
+            .append(option.getOptionDefinition().getOptionName());
+      } else {
+        result.append("--").append(option.getOptionDefinition().getOptionName());
+        if (value != null) { // Can be null for Void options.
+          result.append("=").append(ShellEscaper.escapeString(value));
+        }
+      }
     }
     return result.toString();
   }
@@ -51,20 +69,35 @@ public final class OptionsUtils {
    * specified options; option values are shell-escaped.
    */
   public static String asShellEscapedString(OptionsProvider options) {
-    return asShellEscapedString(options.asCompleteListOfParsedOptions());
+    return asShellEscapedString(options.asListOfUnparsedOptions());
   }
 
   /**
    * Return a representation of the non-hidden specified options, as a list of string. No escaping
    * is done.
    */
-  public static List<String> asArgumentList(Iterable<ParsedOptionDescription> optionsList) {
+  public static List<String> asArgumentList(Iterable<UnparsedOptionValueDescription> optionsList) {
     ImmutableList.Builder<String> builder = ImmutableList.builder();
-    for (ParsedOptionDescription option : optionsList) {
+    for (UnparsedOptionValueDescription option : optionsList) {
       if (option.isHidden()) {
         continue;
       }
-      builder.add(option.getCanonicalForm());
+      String value = option.getUnconvertedValue();
+      if (option.isBooleanOption()) {
+        boolean isEnabled = false;
+        try {
+          isEnabled = new Converters.BooleanConverter().convert(value);
+        } catch (OptionsParsingException e) {
+          throw new RuntimeException("Unexpected parsing exception", e);
+        }
+        builder.add((isEnabled ? "--" : "--no") + option.getOptionDefinition().getOptionName());
+      } else {
+        String optionString = "--" + option.getOptionDefinition().getOptionName();
+        if (value != null) { // Can be null for Void options.
+          optionString += "=" + value;
+        }
+        builder.add(optionString);
+      }
     }
     return builder.build();
   }
@@ -74,15 +107,16 @@ public final class OptionsUtils {
    * is done.
    */
   public static List<String> asArgumentList(OptionsProvider options) {
-    return asArgumentList(options.asCompleteListOfParsedOptions());
+    return asArgumentList(options.asListOfUnparsedOptions());
   }
 
   /**
-   * Returns a string representation of the non-hidden explicitly or implicitly specified options,
-   * filtering out any sensitive options; option values are shell-escaped.
+   * Returns a string representation of the non-hidden explicitly or implicitly
+   * specified options, filtering out any sensitive options; option values are
+   * shell-escaped.
    */
-  public static String asFilteredShellEscapedString(
-      OptionsProvider options, Iterable<ParsedOptionDescription> optionsList) {
+  public static String asFilteredShellEscapedString(OptionsProvider options,
+      Iterable<UnparsedOptionValueDescription> optionsList) {
     return asShellEscapedString(optionsList);
   }
 
@@ -92,7 +126,7 @@ public final class OptionsUtils {
    * shell-escaped.
    */
   public static String asFilteredShellEscapedString(OptionsProvider options) {
-    return asFilteredShellEscapedString(options, options.asCompleteListOfParsedOptions());
+    return asFilteredShellEscapedString(options, options.asListOfUnparsedOptions());
   }
 
   /**

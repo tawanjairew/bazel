@@ -25,7 +25,6 @@ import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.sun.source.util.JavacTask;
 import com.sun.tools.javac.api.ClientCodeWrapper.Trusted;
 import com.sun.tools.javac.api.JavacTool;
-import com.sun.tools.javac.file.CacheFSInfo;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.main.JavaCompiler;
 import com.sun.tools.javac.util.Context;
@@ -76,7 +75,6 @@ public class BlazeJavacMain {
     }
 
     Context context = new Context();
-    CacheFSInfo.preRegister(context);
     setupBlazeJavaCompiler(arguments.plugins(), context);
 
     boolean ok = false;
@@ -198,14 +196,8 @@ public class BlazeJavacMain {
   @Trusted
   private static class ClassloaderMaskingFileManager extends JavacFileManager {
 
-    private static Context getContext() {
-      Context context = new Context();
-      CacheFSInfo.preRegister(context);
-      return context;
-    }
-
     public ClassloaderMaskingFileManager() {
-      super(getContext(), false, UTF_8);
+      super(new Context(), false, UTF_8);
     }
 
     @Override

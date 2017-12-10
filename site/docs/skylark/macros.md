@@ -2,10 +2,7 @@
 layout: documentation
 title: Macros
 ---
-
 # Macros
-
-<!-- [TOC] -->
 
 ## Macro creation
 

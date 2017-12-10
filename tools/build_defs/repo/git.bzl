@@ -14,8 +14,6 @@
 """Rules for cloning external git repositories."""
 
 def _clone_or_update(ctx):
-  if (ctx.attr.verbose):
-    print('git.bzl: Cloning or updating repository %s' % ctx.name)
   if ((not ctx.attr.tag and not ctx.attr.commit) or
       (ctx.attr.tag and ctx.attr.commit)):
     fail('Exactly one of commit and tag must be provided')
@@ -32,7 +30,7 @@ set -ex
       git clone '{remote}' '{dir}'
     fi
     cd '{dir}'
-    git reset --hard {ref} || (git fetch origin {ref}:{ref} && git reset --hard {ref})
+    git reset --hard {ref} || (git fetch && git reset --hard {ref})
     git clean -xdf )
   """.format(
       working_dir=ctx.path('.').dirname,
@@ -74,14 +72,13 @@ _common_attrs = {
     'commit': attr.string(default=''),
     'tag': attr.string(default=''),
     'init_submodules': attr.bool(default=False),
-    'verbose': attr.bool(default=False),
 }
 
 
 new_git_repository = repository_rule(
     implementation=_new_git_repository_implementation,
     attrs=_common_attrs + {
-        'build_file': attr.label(allow_single_file=True),
+        'build_file': attr.label(),
         'build_file_content': attr.string(),
     }
 )

@@ -47,14 +47,6 @@ final class ScopedTemporaryDirectory extends SimpleFileVisitor<Path> implements 
     return this.path;
   }
 
-  public Path subDirectoryOf(String... directories) throws IOException {
-    Path sub = this.path;
-    for (String directory : directories) {
-      sub = sub.resolve(directory);
-    }
-    return Files.createDirectories(sub);
-  }
-
   private void makeWritable(Path file) throws IOException {
     FileStore fileStore = Files.getFileStore(file);
     if (IS_WINDOWS && fileStore.supportsFileAttributeView(DosFileAttributeView.class)) {
@@ -74,17 +66,13 @@ final class ScopedTemporaryDirectory extends SimpleFileVisitor<Path> implements 
 
   @Override
   public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-    if (IS_WINDOWS) {
-      makeWritable(dir);
-    }
+    makeWritable(dir);
     return FileVisitResult.CONTINUE;
   }
 
   @Override
   public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-    if (IS_WINDOWS) {
-      makeWritable(file);
-    }
+    makeWritable(file);
     Files.delete(file);
     return FileVisitResult.CONTINUE;
   }

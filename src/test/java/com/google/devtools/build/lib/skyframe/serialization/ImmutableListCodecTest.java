@@ -15,8 +15,6 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.AbstractObjectCodecTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -27,7 +25,7 @@ public class ImmutableListCodecTest extends AbstractObjectCodecTest<ImmutableLis
   @SuppressWarnings("unchecked")
   public ImmutableListCodecTest() {
     super(
-        new ImmutableListCodec<>(StringCodecs.simple()),
+        new ImmutableListCodec<>(new StringCodec()),
         ImmutableList.of(),
         ImmutableList.of("foo"),
         ImmutableList.of("bar", "baz"));

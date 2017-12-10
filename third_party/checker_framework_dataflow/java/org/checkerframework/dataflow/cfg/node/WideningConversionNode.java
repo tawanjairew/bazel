@@ -1,22 +1,27 @@
 package org.checkerframework.dataflow.cfg.node;
 
-import com.sun.source.tree.Tree;
 import java.util.Collection;
 import java.util.Collections;
+
 import javax.lang.model.type.TypeMirror;
+
 import org.checkerframework.dataflow.util.HashCodeUtils;
+
 import org.checkerframework.javacutil.TypesUtils;
 
+import com.sun.source.tree.Tree;
+
 /**
- * A node for the widening primitive conversion operation. See JLS 5.1.2 for the definition of
- * widening primitive conversion.
+ * A node for the widening primitive conversion operation. See JLS 5.1.2 for the
+ * definition of widening primitive conversion.
  *
- * <p>A {@link WideningConversionNode} does not correspond to any tree node in the parsed AST. It is
- * introduced when a value of some primitive type appears in a context that requires a different
- * primitive with more bits of precision.
+ * A {@link WideningConversionNode} does not correspond to any tree node in the
+ * parsed AST. It is introduced when a value of some primitive type appears in a
+ * context that requires a different primitive with more bits of precision.
  *
  * @author Stefan Heule
  * @author Charlie Garrett
+ *
  */
 public class WideningConversionNode extends Node {
 
@@ -34,7 +39,6 @@ public class WideningConversionNode extends Node {
         return operand;
     }
 
-    @Override
     public TypeMirror getType() {
         return type;
     }

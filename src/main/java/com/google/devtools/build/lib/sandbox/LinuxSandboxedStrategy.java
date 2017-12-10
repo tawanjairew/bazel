@@ -40,8 +40,10 @@ public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
   }
 
   static LinuxSandboxedSpawnRunner create(
-      CommandEnvironment cmdEnv, Path sandboxBase, String productName, int timeoutGraceSeconds)
-      throws IOException {
+      CommandEnvironment cmdEnv,
+      Path sandboxBase,
+      int timeoutGraceSeconds)
+          throws IOException {
     Path inaccessibleHelperFile = sandboxBase.getRelative("inaccessibleHelperFile");
     FileSystemUtils.touchFile(inaccessibleHelperFile);
     inaccessibleHelperFile.setReadable(false);
@@ -57,7 +59,6 @@ public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
     return new LinuxSandboxedSpawnRunner(
         cmdEnv,
         sandboxBase,
-        productName,
         inaccessibleHelperFile,
         inaccessibleHelperDir,
         timeoutGraceSeconds);

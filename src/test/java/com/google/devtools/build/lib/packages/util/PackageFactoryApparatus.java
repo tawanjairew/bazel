@@ -34,12 +34,12 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.common.options.Options;
 import java.io.IOException;
 
 /**
@@ -110,8 +110,7 @@ public class PackageFactoryApparatus {
    * Parses the {@code buildFile} into a {@link BuildFileAST}.
    */
   public BuildFileAST ast(Path buildFile) throws IOException {
-    byte[] bytes = FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
-    ParserInputSource inputSource = ParserInputSource.create(bytes, buildFile.asFragment());
+    ParserInputSource inputSource = ParserInputSource.create(buildFile);
     return BuildFileAST.parseBuildFile(inputSource, eventHandler);
   }
 
@@ -143,7 +142,7 @@ public class PackageFactoryApparatus {
             ImmutableList.<Event>of(),
             ImmutableList.<Postable>of(),
             ConstantRuleVisibility.PUBLIC,
-            SkylarkSemantics.DEFAULT_SEMANTICS,
+            Options.getDefaults(SkylarkSemanticsOptions.class),
             false,
             new MakeEnvironment.Builder(),
             ImmutableMap.<String, Extension>of(),

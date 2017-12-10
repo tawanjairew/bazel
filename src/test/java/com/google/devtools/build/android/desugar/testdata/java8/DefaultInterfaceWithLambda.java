@@ -14,22 +14,20 @@
 package com.google.devtools.build.android.desugar.testdata.java8;
 
 import com.google.common.collect.ImmutableList;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public interface DefaultInterfaceWithLambda {
   String ZERO = String.valueOf(0);
 
-  public default List<String> defaultWithLambda() {
+  public default ImmutableList<String> defaultWithLambda() {
     return ImmutableList.of(0, 1)
         .stream()
         .map(i -> i == 0 ? ZERO : String.valueOf(i))
-        .collect(Collectors.toList());
+        .collect(ImmutableList.toImmutableList());
   }
 
-  public default List<String> defaultCallsInterfaceMethod() {
+  public default ImmutableList<String> defaultCallsInterfaceMethod() {
     return digits();
   }
 
-  public List<String> digits();
+  public ImmutableList<String> digits();
 }

@@ -1,6 +1,7 @@
 package org.checkerframework.dataflow.cfg.block;
 
-public class SpecialBlockImpl extends SingleSuccessorBlockImpl implements SpecialBlock {
+public class SpecialBlockImpl extends SingleSuccessorBlockImpl implements
+        SpecialBlock {
 
     /** The type of this special basic block. */
     protected SpecialBlockType specialType;
@@ -19,4 +20,5 @@ public class SpecialBlockImpl extends SingleSuccessorBlockImpl implements Specia
     public String toString() {
         return "SpecialBlock(" + specialType + ")";
     }
+
 }

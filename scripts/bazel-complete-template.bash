@@ -56,9 +56,8 @@
 # Some commands might interfer with the important one, so don't complete them
 : ${BAZEL_IGNORED_COMMAND_REGEX:="__none__"}
 
-# bazel & ibazel commands
+# Bazel command
 : ${BAZEL:=bazel}
-: ${IBAZEL:=ibazel}
 
 # Pattern to match for looking for a target
 #  BAZEL_BUILD_MATCH_PATTERN__* give the pattern for label-*
@@ -467,4 +466,3 @@ _bazel__complete_target_stdout() {
 
 # default completion for bazel
 complete -F _bazel__complete -o nospace "${BAZEL}"
-complete -F _bazel__complete -o nospace "${IBAZEL}"

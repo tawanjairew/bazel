@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages.util;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.skyframe.packages.PackageFactoryBuilderWithSkyframeForTesting;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -30,8 +29,7 @@ public class LoadingMock {
     return TestConstants.PRODUCT_NAME;
   }
 
-  public PackageFactoryBuilderWithSkyframeForTesting getPackageFactoryBuilderForTesting(
-      BlazeDirectories directories) {
+  public PackageFactoryBuilderWithSkyframeForTesting getPackageFactoryBuilderForTesting() {
     return (PackageFactoryBuilderWithSkyframeForTesting)
         TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING.builder();
   }

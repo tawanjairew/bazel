@@ -105,13 +105,8 @@ public class TransitiveTargetFunction
   }
 
   @Override
-  Label argumentFromKey(SkyKey key) {
-    return ((TransitiveTargetKey) key).getLabel();
-  }
-
-  @Override
   SkyKey getKey(Label label) {
-    return TransitiveTargetKey.of(label);
+    return TransitiveTargetValue.key(label);
   }
 
   @Override
@@ -135,7 +130,7 @@ public class TransitiveTargetFunction
 
     for (Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>> entry :
         depEntries) {
-      Label depLabel = ((TransitiveTargetKey) entry.getKey()).getLabel();
+      Label depLabel = (Label) entry.getKey().argument();
       TransitiveTargetValue transitiveTargetValue;
       try {
         transitiveTargetValue = (TransitiveTargetValue) entry.getValue().get();
@@ -202,14 +197,9 @@ public class TransitiveTargetFunction
 
       // Declared by late-bound attributes:
       for (Attribute attr : rule.getAttributes()) {
-        if (attr.isLateBound()
-            && attr.getLateBoundDefault().getFragmentClass() != null
-            && BuildConfiguration.Fragment.class.isAssignableFrom(
-                attr.getLateBoundDefault().getFragmentClass())) {
-          addFragmentIfNew(
-              builder,
-              (Class<? extends BuildConfiguration.Fragment>)
-                  attr.getLateBoundDefault().getFragmentClass());
+        if (attr.isLateBound()) {
+          addFragmentsIfNew(builder,
+              attr.getLateBoundDefault().getRequiredConfigurationFragments());
         }
       }
 

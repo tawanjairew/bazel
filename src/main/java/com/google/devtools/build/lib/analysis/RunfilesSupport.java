@@ -15,19 +15,18 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -122,7 +121,7 @@ public final class RunfilesSupport {
     Artifact artifactsMiddleman = createArtifactsMiddleman(ruleContext, runfiles.getAllArtifacts());
     if (createManifest) {
       runfilesInputManifest = createRunfilesInputManifestArtifact(ruleContext);
-      runfilesManifest = createRunfilesAction(ruleContext, runfiles);
+      runfilesManifest = createRunfilesAction(ruleContext, runfiles, artifactsMiddleman);
     } else {
       runfilesInputManifest = runfilesManifest =
           createManifestMiddleman(ruleContext, runfiles, artifactsMiddleman);
@@ -268,7 +267,7 @@ public final class RunfilesSupport {
       Iterable<Artifact> allRunfilesArtifacts) {
     return context.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
         context.getActionOwner(), owningExecutable, allRunfilesArtifacts,
-        context.getMiddlemanDirectory(),
+        context.getConfiguration().getMiddlemanDirectory(context.getRule().getRepository()),
         "runfiles_artifacts");
   }
 
@@ -277,19 +276,21 @@ public final class RunfilesSupport {
     return context.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
         context.getActionOwner(), owningExecutable,
         ImmutableList.of(artifactsMiddleman, outputManifest),
-        context.getMiddlemanDirectory(),
+        context.getConfiguration().getMiddlemanDirectory(context.getRule().getRepository()),
         "runfiles");
   }
 
   /**
-   * Creates a runfiles action for all of the specified files, and returns the output artifact (the
-   * artifact for the MANIFEST file).
+   * Creates a runfiles action for all of the specified files, and returns the
+   * output artifact (the artifact for the MANIFEST file).
    *
-   * <p>The "runfiles" action creates a symlink farm that links all the runfiles (which may come
-   * from different places, e.g. different package paths, generated files, etc.) into a single tree,
-   * so that programs can access them using the workspace-relative name.
+   * <p>The "runfiles" action creates a symlink farm that links all the runfiles
+   * (which may come from different places, e.g. different package paths,
+   * generated files, etc.) into a single tree, so that programs can access them
+   * using the workspace-relative name.
    */
-  private Artifact createRunfilesAction(ActionConstructionContext context, Runfiles runfiles) {
+  private Artifact createRunfilesAction(ActionConstructionContext context, Runfiles runfiles,
+      Artifact artifactsMiddleman) {
     // Compute the names of the runfiles directory and its MANIFEST file.
     Artifact inputManifest = getRunfilesInputManifest();
     context.getAnalysisEnvironment().registerAction(
@@ -307,13 +308,14 @@ public final class RunfilesSupport {
 
     BuildConfiguration config = context.getConfiguration();
     Artifact outputManifest = context.getDerivedArtifact(
-        outputManifestPath, context.getBinDirectory());
+        outputManifestPath, config.getBinDirectory(context.getRule().getRepository()));
     context
         .getAnalysisEnvironment()
         .registerAction(
             new SymlinkTreeAction(
                 context.getActionOwner(),
                 inputManifest,
+                artifactsMiddleman,
                 outputManifest,
                 /*filesetTree=*/ false,
                 config.getLocalShellEnvironment(),
@@ -336,7 +338,7 @@ public final class RunfilesSupport {
     }
     return context.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
         context.getActionOwner(), owningExecutable, SourceManifestAction.getDependencies(runfiles),
-        context.getMiddlemanDirectory(),
+        context.getConfiguration().getMiddlemanDirectory(context.getRule().getRepository()),
         "runfiles_manifest");
   }
 
@@ -354,7 +356,7 @@ public final class RunfilesSupport {
         executablePath.getBaseName() + ".runfiles.SOURCES");
     Artifact sourceOnlyManifest = context.getDerivedArtifact(
         sourcesManifestPath,
-        context.getBinDirectory());
+        context.getConfiguration().getBinDirectory(context.getRule().getRepository()));
     context.getAnalysisEnvironment().registerAction(SourceManifestAction.forRunfiles(
         ManifestType.SOURCES_ONLY, context.getActionOwner(), sourceOnlyManifest, runfiles));
     return sourceOnlyManifest;
@@ -393,7 +395,7 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, CommandLine.EMPTY));
+        computeArgs(ruleContext, CommandLine.EMPTY, ImmutableList.<MakeVariableSupplier>of()));
   }
 
   /**
@@ -406,7 +408,8 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, CommandLine.of(appendingArgs)));
+        computeArgs(
+            ruleContext, CommandLine.of(appendingArgs), ImmutableList.<MakeVariableSupplier>of()));
   }
 
   /**
@@ -419,19 +422,26 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, appendingArgs));
+        computeArgs(ruleContext, appendingArgs, ImmutableList.<MakeVariableSupplier>of()));
+  }
+
+  public static RunfilesSupport withExecutable(
+      RuleContext ruleContext,
+      Runfiles runfiles,
+      Artifact executable,
+      ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers) {
+    return new RunfilesSupport(
+        ruleContext,
+        executable,
+        runfiles,
+        computeArgs(ruleContext, CommandLine.EMPTY, makeVariableSuppliers));
   }
 
   private static CommandLine computeArgs(
       RuleContext ruleContext,
-      CommandLine additionalArgs) {
-    if (!ruleContext.getRule().isAttrDefined("args", Type.STRING_LIST)) {
-      // Some non-_binary rules create RunfilesSupport instances; it is fine to not have an args
-      // attribute here.
-      return additionalArgs;
-    }
+      CommandLine additionalArgs,
+      ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers) {
     return CommandLine.concat(
-        ruleContext.getExpander().withDataLocations().tokenized("args"),
-        additionalArgs);
+        ruleContext.getTokenizedStringListAttr("args", makeVariableSuppliers), additionalArgs);
   }
 }

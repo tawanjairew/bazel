@@ -16,19 +16,27 @@ package com.google.devtools.build.android;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Objects;
-import com.google.common.truth.FailureMetadata;
+import com.google.common.truth.FailureStrategy;
 import com.google.common.truth.Subject;
+import com.google.common.truth.SubjectFactory;
 import javax.annotation.Nullable;
 
 class UnwrittenMergedAndroidDataSubject
     extends Subject<UnwrittenMergedAndroidDataSubject, UnwrittenMergedAndroidData> {
 
-  static final Subject.Factory<UnwrittenMergedAndroidDataSubject, UnwrittenMergedAndroidData>
-      FACTORY = UnwrittenMergedAndroidDataSubject::new;
+  static final SubjectFactory<UnwrittenMergedAndroidDataSubject, UnwrittenMergedAndroidData>
+      FACTORY =
+          new SubjectFactory<UnwrittenMergedAndroidDataSubject, UnwrittenMergedAndroidData>() {
+            @Override
+            public UnwrittenMergedAndroidDataSubject getSubject(
+                FailureStrategy fs, UnwrittenMergedAndroidData that) {
+              return new UnwrittenMergedAndroidDataSubject(fs, that);
+            }
+          };
 
   public UnwrittenMergedAndroidDataSubject(
-      FailureMetadata failureMetadata, @Nullable UnwrittenMergedAndroidData subject) {
-    super(failureMetadata, subject);
+      FailureStrategy failureStrategy, @Nullable UnwrittenMergedAndroidData subject) {
+    super(failureStrategy, subject);
   }
 
   public void isEqualTo(UnwrittenMergedAndroidData expected) {

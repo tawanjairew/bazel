@@ -8,25 +8,19 @@ package(default_visibility = ["//src:__subpackages__"])
 
 filegroup(
     name = "srcs",
-    srcs = glob(["**"]) + ["//src/test/skylark/skylint:srcs"],
+    srcs = glob(["**"]),
 )
 
-[
-    py_test(
-        name = "skylark_test_" + test_file.replace(".", "_"),
-        srcs = [
-            "skylark_test.py",
-            "testenv.py",
-        ],
-        args = [test_file],
-        data = [
-            "//src/main/java/com/google/devtools/skylark:Skylark",
-            test_file,
-        ],
-        main = "skylark_test.py",
-    )
-    for test_file in glob(["testdata/*"])
-]
+py_test(
+    name = "skylark_test",
+    srcs = [
+        "skylark_test.py",
+        "testenv.py",
+    ],
+    data = ["//src/main/java/com/google/devtools/skylark:Skylark"] + glob([
+        "testdata/*",
+    ]),
+)
 
 ## Rest of the file should be moved somewhere else (under bazel/tools/).
 

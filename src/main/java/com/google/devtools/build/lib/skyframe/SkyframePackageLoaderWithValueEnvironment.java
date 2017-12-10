@@ -42,15 +42,11 @@ import java.io.IOException;
 class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForConfigurations {
   private final SkyFunction.Environment env;
   private final RuleClassProvider ruleClassProvider;
-  private final BlazeDirectories directories;
 
-  SkyframePackageLoaderWithValueEnvironment(
-      SkyFunction.Environment env,
-      RuleClassProvider ruleClassProvider,
-      BlazeDirectories directories) {
+  public SkyframePackageLoaderWithValueEnvironment(SkyFunction.Environment env,
+      RuleClassProvider ruleClassProvider) {
     this.env = env;
     this.ruleClassProvider = ruleClassProvider;
-    this.directories = directories;
   }
 
   @Override
@@ -100,7 +96,7 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
 
   @Override
   public BlazeDirectories getDirectories() throws InterruptedException {
-    return directories;
+    return PrecomputedValue.BLAZE_DIRECTORIES.get(env);
   }
 
   @Override

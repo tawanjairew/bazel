@@ -1,8 +1,14 @@
 package org.checkerframework.dataflow.cfg.node;
 
-import com.sun.source.tree.BinaryTree;
-import com.sun.source.tree.Tree.Kind;
+import java.util.Collection;
+import java.util.LinkedList;
+
 import org.checkerframework.dataflow.util.HashCodeUtils;
+
+import org.checkerframework.javacutil.InternalUtils;
+
+import com.sun.source.tree.Tree;
+import com.sun.source.tree.Tree.Kind;
 
 /**
  * A node for the integer remainder:
@@ -13,12 +19,33 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
  *
  * @author Stefan Heule
  * @author Charlie Garrett
+ *
  */
-public class IntegerRemainderNode extends BinaryOperationNode {
+public class IntegerRemainderNode extends Node {
 
-    public IntegerRemainderNode(BinaryTree tree, Node left, Node right) {
-        super(tree, left, right);
+    protected Tree tree;
+    protected Node left;
+    protected Node right;
+
+    public IntegerRemainderNode(Tree tree, Node left, Node right) {
+        super(InternalUtils.typeOf(tree));
         assert tree.getKind() == Kind.REMAINDER;
+        this.tree = tree;
+        this.left = left;
+        this.right = right;
+    }
+
+    public Node getLeftOperand() {
+        return left;
+    }
+
+    public Node getRightOperand() {
+        return right;
+    }
+
+    @Override
+    public Tree getTree() {
+        return tree;
     }
 
     @Override
@@ -44,5 +71,13 @@ public class IntegerRemainderNode extends BinaryOperationNode {
     @Override
     public int hashCode() {
         return HashCodeUtils.hash(getLeftOperand(), getRightOperand());
+    }
+
+    @Override
+    public Collection<Node> getOperands() {
+        LinkedList<Node> list = new LinkedList<Node>();
+        list.add(getLeftOperand());
+        list.add(getRightOperand());
+        return list;
     }
 }

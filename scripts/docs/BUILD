@@ -15,5 +15,3 @@ py_binary(
     visibility = ["//site:__pkg__"],
     deps = [":dot-converter"],
 )
-
-exports_files(["jekyll_build.sh.tpl"])

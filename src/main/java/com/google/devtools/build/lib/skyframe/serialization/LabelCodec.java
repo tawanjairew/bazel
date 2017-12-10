@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe.serialization;
 
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
@@ -27,7 +26,7 @@ public class LabelCodec implements ObjectCodec<Label> {
 
   // TODO(michajlo): Share single instance of package id codec among all the codecs.
   private final PackageIdentifierCodec packageIdCodec = new PackageIdentifierCodec();
-  private final ObjectCodec<String> stringCodec = StringCodecs.asciiOptimized();
+  private final ObjectCodec<String> stringCodec = new FastStringCodec();
 
   @Override
   public Class<Label> getEncodedClass() {

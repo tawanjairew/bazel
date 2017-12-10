@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -28,7 +27,7 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
+import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
 import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
@@ -46,7 +45,6 @@ import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.BadExitStatusException;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -58,6 +56,8 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OptionsUtils;
+import com.google.devtools.build.lib.util.OsUtils;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -96,12 +96,12 @@ public class RunCommand implements BlazeCommand  {
       name = "script_path",
       category = "run",
       defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       converter = OptionsUtils.PathFragmentConverter.class,
       help =
-          "If set, write a shell script to the given file which invokes the target. "
-              + "If this option is set, the target is not run from %{product}. "
+          "If set, write a shell script to the given file which invokes the "
+              + "target. If this option is set, the target is not run from %{product}. "
               + "Use '%{product} run --script_path=foo //foo && ./foo' to invoke target '//foo' "
               + "This differs from '%{product} run //foo' in that the %{product} lock is released "
               + "and the executable is connected to the terminal's stdin."
@@ -114,6 +114,8 @@ public class RunCommand implements BlazeCommand  {
       + "Do not use wildcards that match more than one target";
   @VisibleForTesting
   public static final String NO_TARGET_MESSAGE = "No targets found to run";
+
+  private static final String PROCESS_WRAPPER = "process-wrapper" + OsUtils.executableExtension();
 
   // Value of --run_under as of the most recent command invocation.
   private RunUnder currentRunUnder;
@@ -262,9 +264,11 @@ public class RunCommand implements BlazeCommand  {
     // on that platform. Also we skip it when writing the command-line to a file instead
     // of executing it directly.
     if (OS.getCurrent() != OS.WINDOWS && runOptions.scriptPath == null) {
-      Preconditions.checkState(ProcessWrapperUtil.isSupported(env),
-          "process-wraper not found in embedded tools");
-      cmdLine.add(ProcessWrapperUtil.getProcessWrapper(env).getPathString());
+      PathFragment processWrapperPath =
+          env.getBlazeWorkspace().getBinTools().getExecPath(PROCESS_WRAPPER);
+      Preconditions.checkNotNull(
+          processWrapperPath, PROCESS_WRAPPER + " not found in embedded tools");
+      cmdLine.add(env.getExecRoot().getRelative(processWrapperPath).getPathString());
     }
     List<String> prettyCmdLine = new ArrayList<>();
     // Insert the command prefix specified by the "--run_under=<command-prefix>" option

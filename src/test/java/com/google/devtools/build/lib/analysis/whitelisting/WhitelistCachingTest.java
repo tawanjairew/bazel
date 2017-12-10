@@ -33,7 +33,7 @@ public final class WhitelistCachingTest extends AnalysisCachingTestBase {
   public void addDummyRule() throws Exception {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
-    builder.addRuleDefinition(WhitelistDummyRule.DEFINITION);
+    builder.addRuleDefinition(new WhitelistDummyRule());
     useRuleClassProvider(builder.build());
   }
 

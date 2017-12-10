@@ -25,18 +25,14 @@ public interface ClassObject {
   /**
    * Returns the value associated with the name field in this struct,
    * or null if the field does not exist.
-   *
-   * @throws EvalException if a user-visible error occurs (other than non-existent field).
    */
   @Nullable
-  Object getValue(String name) throws EvalException;
+  Object getValue(String name);
 
   /**
    * Returns the fields of this struct.
-   *
-   * @throws EvalException if a user-visible error occurs.
    */
-  ImmutableCollection<String> getKeys() throws EvalException;
+  ImmutableCollection<String> getKeys();
 
   /**
    * Returns a customized error message to print if the name is not a valid struct field

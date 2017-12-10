@@ -21,14 +21,13 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.testutil.Scratch;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystem.HashFunction;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.devtools.remoteexecution.v1test.Directory;
 import java.util.ArrayList;
@@ -43,14 +42,13 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class TreeNodeRepositoryTest {
   private Scratch scratch;
-  private DigestUtil digestUtil;
   private Root rootDir;
   private Path rootPath;
 
   @Before
   public final void setRootDir() throws Exception {
-    digestUtil = new DigestUtil(HashFunction.SHA256);
-    scratch = new Scratch(new InMemoryFileSystem(BlazeClock.instance(), HashFunction.SHA256));
+    FileSystem.setDigestFunctionForTesting(HashFunction.SHA1);
+    scratch = new Scratch();
     rootDir = Root.asDerivedRoot(scratch.dir("/exec/root"));
     rootPath = rootDir.getPath();
   }
@@ -58,7 +56,7 @@ public class TreeNodeRepositoryTest {
   private TreeNodeRepository createTestTreeNodeRepository() {
     ActionInputFileCache inputFileCache =
         new SingleBuildFileCache(rootPath.getPathString(), scratch.getFileSystem());
-    return new TreeNodeRepository(rootPath, inputFileCache, digestUtil);
+    return new TreeNodeRepository(rootPath, inputFileCache);
   }
 
   @Test

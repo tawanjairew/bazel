@@ -22,13 +22,13 @@ cc_test(
     name = "file_test",
     size = "small",
     srcs = ["file_test.cc"] + select({
-        "//src/conditions:windows": [
+        "//src:windows": [
             "file_windows_test.cc",
         ],
-        "//src/conditions:windows_msys": [
+        "//src:windows_msys": [
             "file_windows_test.cc",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
             "file_windows_test.cc",
         ],
         "//conditions:default": [
@@ -40,15 +40,15 @@ cc_test(
         "//src/main/cpp/util:file",
         "//third_party:gtest",
     ] + select({
-        "//src/conditions:windows": [
+        "//src:windows": [
             ":windows_test_util",
             "//src/main/native/windows:lib-file",
         ],
-        "//src/conditions:windows_msys": [
+        "//src:windows_msys": [
             ":windows_test_util",
             "//src/main/native/windows:lib-file",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
             ":windows_test_util",
             "//src/main/native/windows:lib-file",
         ],
@@ -90,15 +90,15 @@ cc_library(
     name = "windows_test_util",
     testonly = 1,
     srcs = select({
-        "//src/conditions:windows": ["windows_test_util.cc"],
-        "//src/conditions:windows_msys": ["windows_test_util.cc"],
-        "//src/conditions:windows_msvc": ["windows_test_util.cc"],
+        "//src:windows": ["windows_test_util.cc"],
+        "//src:windows_msys": ["windows_test_util.cc"],
+        "//src:windows_msvc": ["windows_test_util.cc"],
         "//conditions:default": [],
     }),
     hdrs = select({
-        "//src/conditions:windows": ["windows_test_util.h"],
-        "//src/conditions:windows_msys": ["windows_test_util.h"],
-        "//src/conditions:windows_msvc": ["windows_test_util.h"],
+        "//src:windows": ["windows_test_util.h"],
+        "//src:windows_msys": ["windows_test_util.h"],
+        "//src:windows_msvc": ["windows_test_util.h"],
         "//conditions:default": [],
     }),
     visibility = [
@@ -111,21 +111,21 @@ cc_test(
     name = "windows_test_util_test",
     size = "small",
     srcs = select({
-        "//src/conditions:windows": ["windows_test_util_test.cc"],
-        "//src/conditions:windows_msys": ["windows_test_util_test.cc"],
-        "//src/conditions:windows_msvc": ["windows_test_util_test.cc"],
+        "//src:windows": ["windows_test_util_test.cc"],
+        "//src:windows_msys": ["windows_test_util_test.cc"],
+        "//src:windows_msvc": ["windows_test_util_test.cc"],
         "//conditions:default": ["dummy_test.cc"],
     }),
     deps = select({
-        "//src/conditions:windows": [
+        "//src:windows": [
             ":windows_test_util",
             "//third_party:gtest",
         ],
-        "//src/conditions:windows_msys": [
+        "//src:windows_msys": [
             ":windows_test_util",
             "//third_party:gtest",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
             ":windows_test_util",
             "//third_party:gtest",
         ],
@@ -141,20 +141,3 @@ cc_library(
 )
 
 test_suite(name = "all_tests")
-
-test_suite(
-    name = "windows_tests",
-    tags = [
-        "-no_windows",
-        "-slow",
-    ],
-    visibility = ["//visibility:private"],
-)
-
-test_suite(
-    name = "all_windows_tests",
-    tests = [
-        ":windows_tests",
-    ],
-    visibility = ["//src/test/cpp:__pkg__"],
-)

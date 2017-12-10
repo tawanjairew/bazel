@@ -39,24 +39,24 @@ Every rule repository should have a certain layout so that users can quickly
 understand new rules.
 
 For example, suppose we are writing new Skylark rules for the (make-believe)
-mockascript language. We would have the following structure:
+chaiscript language. We would have the following structure:
 
 ```
 .travis.yml
 README.md
 WORKSPACE
-mockascript/
+chaiscript/
   BUILD
-  mockascript.bzl
+  chaiscript.bzl
 tests/
   BUILD
   some_test.sh
   another_test.py
 examples/
   BUILD
-  bin.mocs
-  lib.mocs
-  test.mocs
+  bin.chai
+  lib.chai
+  test.chai
 ```
 
 ### README.md
@@ -102,15 +102,18 @@ docs](https://docs.travis-ci.com/user/getting-started/). Then add a
 `.travis.yml` file to your repository with the following content:
 
 ```
-# On trusty images, the Bazel apt repository can be used.
-addons:
-  apt:
-    sources:
-    - sourceline: 'deb [arch=amd64] http://storage.googleapis.com/bazel-apt stable jdk1.8'
-      key_url: 'https://bazel.build/bazel-release.pub.gpg'
-    packages:
-    - bazel
-
+language:
+  - java
+jdk:
+  - oraclejdk8  # Building Bazel requires JDK8.
+before_install:
+  - wget https://github.com/bazelbuild/bazel/archive/0.3.0.zip  # Replace with desired version
+  - unzip 0.3.0.zip
+  - cd bazel-0.3.0
+  - ./compile.sh
+  - sudo cp output/bazel /usr/bin/bazel
+  - cd ..
+  - rm -rf bazel-0.3.0
 script:
   - bazel build //...
   - bazel test //...

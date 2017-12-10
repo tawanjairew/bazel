@@ -14,21 +14,18 @@
 
 package com.google.devtools.build.lib.analysis.actions;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
-import javax.annotation.Nullable;
 
 /**
  * Action to create a symbolic link.
@@ -37,9 +34,7 @@ public class SymlinkAction extends AbstractAction {
 
   private static final String GUID = "349675b5-437c-4da8-891a-7fb98fba6ab5";
 
-  /** Null when {@link #getPrimaryInput} is the target of the symlink. */
-  @Nullable private final PathFragment inputPath;
-
+  private final PathFragment inputPath;
   private final Artifact output;
   private final String progressMessage;
 
@@ -55,10 +50,7 @@ public class SymlinkAction extends AbstractAction {
       String progressMessage) {
     // These actions typically have only one input and one output, which
     // become the sole and primary in their respective lists.
-    super(owner, ImmutableList.of(input), ImmutableList.of(output));
-    this.inputPath = null;
-    this.output = Preconditions.checkNotNull(output);
-    this.progressMessage = progressMessage;
+    this(owner, input.getExecPath(), input, output, progressMessage);
   }
 
   /**
@@ -101,7 +93,7 @@ public class SymlinkAction extends AbstractAction {
   }
 
   public PathFragment getInputPath() {
-    return inputPath == null ? getPrimaryInput().getExecPath() : inputPath;
+    return inputPath;
   }
 
   public Path getOutputPath() {
@@ -109,34 +101,26 @@ public class SymlinkAction extends AbstractAction {
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
-    Path srcPath;
-    if (inputPath == null) {
-      srcPath = getPrimaryInput().getPath();
-    } else {
-      srcPath = actionExecutionContext.getExecRoot().getRelative(inputPath);
-    }
     try {
-      getOutputPath().createSymbolicLink(srcPath);
+      getOutputPath()
+          .createSymbolicLink(actionExecutionContext.getExecRoot().getRelative(inputPath));
     } catch (IOException e) {
       throw new ActionExecutionException("failed to create symbolic link '"
           + Iterables.getOnlyElement(getOutputs()).prettyPrint()
           + "' to the '" + Iterables.getOnlyElement(getInputs()).prettyPrint()
           + "' due to I/O error: " + e.getMessage(), e, this, false);
     }
-    return ActionResult.EMPTY;
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     // We don't normally need to add inputs to the key. In this case, however, the inputPath can be
     // different from the actual input artifact.
-    if (inputPath != null) {
-      f.addPath(inputPath);
-    }
+    f.addPath(inputPath);
     return f.hexDigestAndReset();
   }
 

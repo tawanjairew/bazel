@@ -1,5 +1,3 @@
-load(":win_rules.bzl", "cc_binary", "cc_library")
-
 filegroup(
     name = "srcs",
     srcs = glob(["**"]) + ["//src/tools/launcher/util:srcs"],
@@ -52,12 +50,4 @@ cc_library(
     srcs = ["bash_launcher.cc"],
     hdrs = ["bash_launcher.h"],
     deps = [":launcher_base"],
-)
-
-test_suite(
-    name = "all_windows_tests",
-    tests = [
-        "//src/tools/launcher/util:all_windows_tests",
-    ],
-    visibility = ["//src:__pkg__"],
 )

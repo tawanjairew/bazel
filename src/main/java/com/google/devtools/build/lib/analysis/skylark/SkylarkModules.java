@@ -56,12 +56,9 @@ public final class SkylarkModules {
 
   private static Environment.Frame createGlobals(List<Class<?>> modules) {
     try (Mutability mutability = Mutability.create("SkylarkModules")) {
-      Environment env = Environment.builder(mutability)
-          .useDefaultSemantics()
-          .setGlobals(BazelLibrary.GLOBALS)
-          .build();
+      Environment env = Environment.builder(mutability).setGlobals(BazelLibrary.GLOBALS).build();
       for (Class<?> moduleClass : modules) {
-        Runtime.setupModuleGlobals(env, moduleClass);
+        Runtime.registerModuleGlobals(env, moduleClass);
       }
       return env.getGlobals();
     }

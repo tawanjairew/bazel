@@ -11,14 +11,14 @@ filegroup(
 cc_test(
     name = "blaze_util_test",
     srcs = select({
-        "//src/conditions:windows": [
+        "//src:windows": [
             "blaze_util_windows_test.cc",
         ],
-        "//src/conditions:windows_msys": [
+        "//src:windows_msys": [
             "blaze_util_test.cc",
             "blaze_util_windows_test.cc",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
             "blaze_util_windows_test.cc",
         ],
         "//conditions:default": [
@@ -73,21 +73,3 @@ cc_test(
 )
 
 test_suite(name = "all_tests")
-
-test_suite(
-    name = "windows_tests",
-    tags = [
-        "-no_windows",
-        "-slow",
-    ],
-    visibility = ["//visibility:private"],
-)
-
-test_suite(
-    name = "all_windows_tests",
-    tests = [
-        ":windows_tests",
-        "//src/test/cpp/util:all_windows_tests",
-    ],
-    visibility = ["//src/test:__pkg__"],
-)

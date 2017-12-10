@@ -51,7 +51,6 @@ public class PlatformConfigurationLoader implements ConfigurationFragmentFactory
         executionPlatform,
         options.platforms,
         options.extraToolchains,
-        options.toolchainResolutionOverrides,
-        options.enabledToolchainTypes);
+        options.toolchainResolutionOverrides);
   }
 }

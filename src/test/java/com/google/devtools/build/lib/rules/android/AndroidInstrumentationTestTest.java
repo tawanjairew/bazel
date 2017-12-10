@@ -38,7 +38,11 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
     scratch.file(
         "java/com/app/BUILD",
         "android_binary(",
-        "  name = 'app',",
+        "  name = 'app1',",
+        "  manifest = 'AndroidManifest.xml',",
+        ")",
+        "android_binary(",
+        "  name = 'app2',",
         "  manifest = 'AndroidManifest.xml',",
         ")",
         "android_binary(",
@@ -48,9 +52,22 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
     scratch.file(
         "javatests/com/app/BUILD",
         "android_binary(",
-        "  name = 'instrumentation_app',",
-        "  instruments = '//java/com/app',",
+        "  name = 'instrumentation_app1',",
         "  manifest = 'AndroidManifest.xml',",
+        ")",
+        "android_instrumentation(",
+        "  name = 'instrumentation1',",
+        "  target = '//java/com/app:app1',",
+        "  instrumentation = ':instrumentation_app1',",
+        ")",
+        "android_binary(",
+        "  name = 'instrumentation_app2',",
+        "  manifest = 'AndroidManifest.xml',",
+        ")",
+        "android_instrumentation(",
+        "  name = 'instrumentation2',",
+        "  target = '//java/com/app:app2',",
+        "  instrumentation = ':instrumentation_app2',",
         ")",
         "android_device_script_fixture(",
         "  name = 'device_fixture',",
@@ -72,7 +89,10 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
         "javatests/com/app/ait/BUILD",
         "android_instrumentation_test(",
         "  name = 'ait',",
-        "  instrumentation = '//javatests/com/app:instrumentation_app',",
+        "  instrumentations = [",
+        "    '//javatests/com/app:instrumentation1',",
+        "    '//javatests/com/app:instrumentation2',",
+        "  ],",
         "  target_device = '//tools/android/emulated_device:nexus_6',",
         "  fixtures = [",
         "    '//javatests/com/app:device_fixture',",
@@ -148,8 +168,10 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
     assertThat(runfiles)
         .containsAllOf(
             getDeviceFixtureScript(getConfiguredTarget("//javatests/com/app:device_fixture")),
-            getInstrumentationApk(getConfiguredTarget("//javatests/com/app:instrumentation_app")),
-            getTargetApk(getConfiguredTarget("//javatests/com/app:instrumentation_app")),
+            getInstrumentationApk(getConfiguredTarget("//javatests/com/app:instrumentation1")),
+            getTargetApk(getConfiguredTarget("//javatests/com/app:instrumentation1")),
+            getInstrumentationApk(getConfiguredTarget("//javatests/com/app:instrumentation2")),
+            getTargetApk(getConfiguredTarget("//javatests/com/app:instrumentation2")),
             Iterables.getOnlyElement(
                 getConfiguredTarget("//javatests/com/app/ait:foo.txt")
                     .getProvider(FileProvider.class)
@@ -170,8 +192,13 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
             .getFileContents();
 
     assertThat(testExecutableScript)
-        .contains("instrumentation_apk=\"javatests/com/app/instrumentation_app.apk\"");
-    assertThat(testExecutableScript).contains("target_apk=\"java/com/app/app.apk\"");
+        .contains(
+            "instrumentation_apks=\"javatests/com/app/instrumentation1-instrumentation.apk "
+                + "javatests/com/app/instrumentation2-instrumentation.apk\"");
+    assertThat(testExecutableScript)
+        .contains(
+            "target_apks=\"javatests/com/app/instrumentation1-target.apk "
+                + "javatests/com/app/instrumentation2-target.apk\"");
     assertThat(testExecutableScript).contains("support_apks=\"java/com/app/support.apk\"");
     assertThat(testExecutableScript)
         .contains(
@@ -197,31 +224,12 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
         ")",
         "android_instrumentation_test(",
         "  name = 'ait',",
-        "  instrumentation = '//javatests/com/app:instrumentation_app',",
+        "  instrumentations = ['//javatests/com/app:instrumentation1'],",
         "  target_device = '//tools/android/emulated_device:nexus_6',",
         "  fixtures = [",
         "    ':host_fixture',",
         "    '//javatests/com/app:host_fixture',",
         "  ],",
-        ")");
-  }
-
-  @Test
-  public void testInstrumentationBinaryIsInstrumenting() throws Exception {
-    checkError(
-        "javatests/com/app/instr",
-        "ait",
-        "The android_binary target at //javatests/com/app/instr:app "
-            + "is missing an 'instruments' attribute",
-        "android_binary(",
-        "  name = 'app',",
-        "  srcs = ['a.java'],",
-        "  manifest = 'AndroidManifest.xml',",
-        ")",
-        "android_instrumentation_test(",
-        "  name = 'ait',",
-        "  instrumentation = ':app',",
-        "  target_device = '//tools/android/emulated_device:nexus_6',",
         ")");
   }
 

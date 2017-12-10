@@ -19,14 +19,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.MiddlemanProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction.Builder;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -39,188 +35,121 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.util.List;
-import javax.annotation.Nullable;
 
 /** A module that contains Skylark utilities for Java support. */
 @SkylarkModule(name = "java_common", doc = "Utilities for Java compilation support in Skylark.")
 public class JavaSkylarkCommon {
   private final JavaSemantics javaSemantics;
 
+  public JavaSkylarkCommon(JavaSemantics javaSemantics) {
+    this.javaSemantics = javaSemantics;
+  }
+
   @SkylarkCallable(
-      name = "create_provider",
-      doc = "Creates a JavaInfo from jars. compile_time/runtime_jars represent the outputs of the "
-          + "target providing a JavaInfo, while transitive_*_jars represent their dependencies."
-          + "<p>Note: compile_time_jars and runtime_jars are not automatically merged into the "
-          + "transitive jars (unless the given transitive_*_jars are empty) - if this is the "
-          + "desired behaviour the user should merge the jars before creating the provider."
-          + "<p>This function also creates actions to generate interface jars by default."
-          + "<p>When use_ijar is True, ijar will be run on the given compile_time_jars and the "
-          + "resulting interface jars will be stored as compile_jars, while the initila jars will "
-          + "be stored as full_compile_jars. "
-          + "<p>When use_ijar=False, the given compile_time_jars will be stored as both "
-          + "compile_jars and full_compile_jars. No actions are created. See JavaInfo#compile_jars "
-          + "and JavaInfo#full_compile_jars for more details."
-          + "<p>Currently only "
-          + "<a href='https://github.com/bazelbuild/bazel/tree/master/third_party/ijar'>ijar</a> is "
-          + "supported for generating interface jars. Header compilation is not yet supported."
-          ,
-      parameters = {
-          @Param(
-              name = "actions",
-              type = SkylarkActionFactory.class,
-              noneable = true,
-              defaultValue = "None",
-              doc = "The ctx.actions object, used to register the actions for creating the "
-                  + "interface jars. Only set if use_ijar=True."
-          ),
-          @Param(
-              name = "compile_time_jars",
-              positional = false,
-              named = true,
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              defaultValue = "[]",
-              doc = "A list or a set of jars that should be used at compilation for a given target."
-          ),
-          @Param(
-              name = "runtime_jars",
-              positional = false,
-              named = true,
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              defaultValue = "[]",
-              doc = "A list or a set of jars that should be used at runtime for a given target."
-          ),
-          @Param(
-              name = "use_ijar",
-              positional = false,
-              named = true,
-              type = Boolean.class,
-              defaultValue = "True",
-              doc = "If True it will generate interface jars for every jar in compile_time_jars."
-                  + "The generating interface jars will be stored as compile_jars and the initial "
-                  + "(full) compile_time_jars will be stored as full_compile_jars."
-                  + "If False the given compile_jars will be stored as both compile_jars and "
-                  + "full_compile_jars."
-          ),
-          @Param(
-              name = "java_toolchain",
-              positional = false,
-              named = true,
-              type = ConfiguredTarget.class,
-              noneable = true,
-              defaultValue = "None",
-              doc = "A label pointing to a java_toolchain rule to be used for retrieving the ijar "
-                  + "tool. Only set when use_ijar is True."
-          ),
-          @Param(
-              name = "transitive_compile_time_jars",
-              positional = false,
-              named = true,
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              defaultValue = "[]",
-              doc = "A list or set of compile time jars collected from the transitive closure of a "
-                  + "rule."
-          ),
-          @Param(
-              name = "transitive_runtime_jars",
-              positional = false,
-              named = true,
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              defaultValue = "[]",
-              doc = "A list or set of runtime jars collected from the transitive closure of a rule."
-          ),
-          @Param(
-              name = "source_jars",
-              positional = false,
-              named = true,
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              defaultValue = "[]",
-              doc = "A list or set of output source jars that contain the uncompiled source files "
-                  + "including the source files generated by annotation processors if the case."
-          )
-      }
+    name = "provider",
+    structField = true,
+    doc = "Returns the Java declared provider. <br>"
+        + "The same value is accessible as <code>JavaInfo</code>. <br>"
+        + "Prefer using <code>JavaInfo</code> in new code."
+  )
+  public Provider getJavaProvider() {
+    return JavaInfo.PROVIDER;
+  }
+
+  @SkylarkCallable(
+    name = "create_provider",
+    documented = false,
+    doc = "Create JavaInfo from pre-built jars. Note that compile_time_jars and "
+        + "runtime_jars are not automatically merged into the recursive jars - if this is the "
+        + "desired behaviour the user should merge the jars before creating the provider. "
+        + "The recursive (compile/runtime) jars are the jars usually collected transitively from "
+        + "dependencies.",
+    parameters = {
+      @Param(
+        name = "compile_time_jars",
+        positional = false,
+        named = true,
+        allowedTypes = {
+          @ParamType(type = SkylarkList.class),
+          @ParamType(type = SkylarkNestedSet.class),
+        },
+        generic1 = Artifact.class,
+        defaultValue = "[]"
+      ),
+      @Param(
+        name = "runtime_jars",
+        positional = false,
+        named = true,
+        allowedTypes = {
+          @ParamType(type = SkylarkList.class),
+          @ParamType(type = SkylarkNestedSet.class),
+        },
+        generic1 = Artifact.class,
+        defaultValue = "[]"
+      ),
+      @Param(
+          name = "transitive_compile_time_jars",
+          positional = false,
+          named = true,
+          allowedTypes = {
+              @ParamType(type = SkylarkList.class),
+              @ParamType(type = SkylarkNestedSet.class),
+          },
+          generic1 = Artifact.class,
+          defaultValue = "[]"
+      ),
+      @Param(
+          name = "transitive_runtime_jars",
+          positional = false,
+          named = true,
+          allowedTypes = {
+              @ParamType(type = SkylarkList.class),
+              @ParamType(type = SkylarkNestedSet.class),
+          },
+          generic1 = Artifact.class,
+          defaultValue = "[]"
+      ),
+      @Param(
+        name = "source_jars",
+        positional = false,
+        named = true,
+        allowedTypes = {
+          @ParamType(type = SkylarkList.class),
+          @ParamType(type = SkylarkNestedSet.class),
+        },
+        generic1 = Artifact.class,
+        defaultValue = "[]"
+      )
+    }
   )
   public JavaInfo create(
-      @Nullable Object actionsUnchecked,
       Object compileTimeJars,
       Object runtimeJars,
-      Boolean useIjar,
-      @Nullable Object javaToolchainUnchecked,
       Object transitiveCompileTimeJars,
       Object transitiveRuntimeJars,
       Object sourceJars)
       throws EvalException {
     NestedSet<Artifact> compileTimeJarsNestedSet = asArtifactNestedSet(compileTimeJars);
     NestedSet<Artifact> runtimeJarsNestedSet = asArtifactNestedSet(runtimeJars);
-
-    JavaCompilationArgs.Builder javaCompilationArgsBuilder = JavaCompilationArgs.builder();
-    if (useIjar && !compileTimeJarsNestedSet.isEmpty())  {
-      if (!(actionsUnchecked instanceof SkylarkActionFactory)) {
-        throw new EvalException(null, "In java_common.create_provider the value of use_ijar is "
-            + "True. Make sure the first argument of the function is the ctx.actions object.");
-      }
-      if (!(javaToolchainUnchecked instanceof  ConfiguredTarget)) {
-        throw new EvalException(null, "In java_common.create_provider the value of use_ijar is "
-            + "True. Make sure the java_toolchain argument is a valid java_toolchain Target.");
-      }
-      SkylarkActionFactory actions = (SkylarkActionFactory) actionsUnchecked;
-      ConfiguredTarget javaToolchain = (ConfiguredTarget) javaToolchainUnchecked;
-      javaCompilationArgsBuilder.addFullCompileTimeJars(compileTimeJarsNestedSet);
-      for (Artifact compileJar : compileTimeJarsNestedSet) {
-        javaCompilationArgsBuilder.addCompileTimeJar(
-            buildIjar(actions, compileJar, javaToolchain)
-        );
-      }
-    } else {
-      javaCompilationArgsBuilder.addCompileTimeJars(compileTimeJarsNestedSet);
-      javaCompilationArgsBuilder.addFullCompileTimeJars(compileTimeJarsNestedSet);
-    }
-
-    JavaCompilationArgs javaCompilationArgs = javaCompilationArgsBuilder
-        .addTransitiveRuntimeJars(runtimeJarsNestedSet)
-        .build();
-
     NestedSet<Artifact> transitiveCompileTimeJarsNestedSet =
         asArtifactNestedSet(transitiveCompileTimeJars);
     NestedSet<Artifact> transitiveRuntimeJarsNestedSet = asArtifactNestedSet(transitiveRuntimeJars);
 
+    JavaCompilationArgs javaCompilationArgs =
+        JavaCompilationArgs.builder()
+            .addTransitiveCompileTimeJars(compileTimeJarsNestedSet)
+            .addTransitiveRuntimeJars(runtimeJarsNestedSet)
+        .build();
     JavaCompilationArgs.Builder recursiveJavaCompilationArgs = JavaCompilationArgs.builder();
-    if (transitiveCompileTimeJarsNestedSet.isEmpty()) {
+    if (transitiveCompileTimeJarsNestedSet.isEmpty() && transitiveRuntimeJarsNestedSet.isEmpty()) {
       recursiveJavaCompilationArgs
-          .addTransitiveCompileTimeJars(javaCompilationArgs.getCompileTimeJars());
-      recursiveJavaCompilationArgs
-          .addTransitiveFullCompileTimeJars(javaCompilationArgs.getFullCompileTimeJars());
+          .addTransitiveCompileTimeJars(compileTimeJarsNestedSet)
+          .addTransitiveRuntimeJars(runtimeJarsNestedSet);
     } else {
       recursiveJavaCompilationArgs
-          .addTransitiveCompileTimeJars(transitiveCompileTimeJarsNestedSet);
-    }
-
-    if (transitiveRuntimeJarsNestedSet.isEmpty()) {
-      recursiveJavaCompilationArgs.addTransitiveRuntimeJars(runtimeJarsNestedSet);
-    } else {
-      recursiveJavaCompilationArgs.addTransitiveRuntimeJars(transitiveRuntimeJarsNestedSet);
+          .addTransitiveCompileTimeJars(transitiveCompileTimeJarsNestedSet)
+          .addTransitiveRuntimeJars(transitiveRuntimeJarsNestedSet);
     }
 
     JavaInfo javaInfo =
@@ -236,21 +165,6 @@ public class JavaSkylarkCommon {
                     asArtifactNestedSet(sourceJars)))
             .build();
     return javaInfo;
-  }
-
-  public JavaSkylarkCommon(JavaSemantics javaSemantics) {
-    this.javaSemantics = javaSemantics;
-  }
-
-  @SkylarkCallable(
-    name = "provider",
-    structField = true,
-    doc = "Returns the Java declared provider. <br>"
-        + "The same value is accessible as <code>JavaInfo</code>. <br>"
-        + "Prefer using <code>JavaInfo</code> in new code."
-  )
-  public Provider getJavaProvider() {
-    return JavaInfo.PROVIDER;
   }
 
   /**
@@ -402,11 +316,7 @@ public class JavaSkylarkCommon {
       ConfiguredTarget javaToolchain,
       ConfiguredTarget hostJavabase,
       SkylarkList<Artifact> sourcepathEntries,
-      SkylarkList<Artifact> resources) throws EvalException, InterruptedException {
-    if (sourceJars.isEmpty() && sourceFiles.isEmpty() && exports.isEmpty()) {
-      throw new EvalException(
-          null, "source_jars, sources and exports cannot be simultaneous empty");
-    }
+      SkylarkList<Artifact> resources) throws EvalException {
 
     JavaLibraryHelper helper =
         new JavaLibraryHelper(skylarkRuleContext.getRuleContext())
@@ -424,35 +334,31 @@ public class JavaSkylarkCommon {
     helper.addAllDeps(depsCompilationArgsProviders);
     helper.addAllExports(exportsCompilationArgsProviders);
     helper.setCompilationStrictDepsMode(getStrictDepsMode(strictDepsMode.toUpperCase()));
+    MiddlemanProvider hostJavabaseProvider = hostJavabase.getProvider(MiddlemanProvider.class);
 
     helper.addAllPlugins(
         JavaInfo.fetchProvidersFromList(plugins, JavaPluginInfoProvider.class));
     helper.addAllPlugins(JavaInfo.fetchProvidersFromList(deps, JavaPluginInfoProvider.class));
 
-    JavaRuleOutputJarsProvider.Builder outputJarsBuilder = JavaRuleOutputJarsProvider.builder();
-
-    boolean generateMergedSourceJar = (sourceJars.size() > 1 || !sourceFiles.isEmpty())
-        || (sourceJars.isEmpty() && sourceFiles.isEmpty() && !exports.isEmpty());
-    Artifact outputSourceJar =
-        generateMergedSourceJar ? getSourceJar(skylarkRuleContext) : sourceJars.get(0);
-
+    NestedSet<Artifact> hostJavabaseArtifacts =
+        hostJavabaseProvider == null
+            ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
+            : hostJavabaseProvider.getMiddlemanArtifact();
+    JavaToolchainProvider javaToolchainProvider = getJavaToolchainProvider(javaToolchain);
     JavaCompilationArtifacts artifacts =
         helper.build(
             javaSemantics,
-            getJavaToolchainProvider(javaToolchain),
-            hostJavabase,
-            SkylarkList.createImmutable(ImmutableList.of()),
-            outputJarsBuilder,
-            /*createOutputSourceJar*/ generateMergedSourceJar,
-            outputSourceJar);
-
+            javaToolchainProvider,
+            hostJavabaseArtifacts,
+            SkylarkList.createImmutable(ImmutableList.<Artifact>of()));
+    JavaRuleOutputJarsProvider javaRuleOutputJarsProvider =
+        JavaRuleOutputJarsProvider.builder().addOutputJar(
+            new JavaRuleOutputJarsProvider.OutputJar(outputJar, /* ijar */ null, sourceJars))
+        .build();
     JavaCompilationArgsProvider javaCompilationArgsProvider =
         helper.buildCompilationArgsProvider(artifacts, true);
-    Runfiles runfiles =
-        new Runfiles.Builder(skylarkRuleContext.getWorkspaceName())
-            .addTransitiveArtifactsWrappedInStableOrder(
-                javaCompilationArgsProvider.getRecursiveJavaCompilationArgs().getRuntimeJars())
-            .build();
+    Runfiles runfiles = new Runfiles.Builder(skylarkRuleContext.getWorkspaceName()).addArtifacts(
+        javaCompilationArgsProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()).build();
 
     JavaPluginInfoProvider transitivePluginsProvider =
         JavaPluginInfoProvider.merge(Iterables.concat(
@@ -462,59 +368,57 @@ public class JavaSkylarkCommon {
               JavaPluginInfoProvider.class, exports)
         ));
 
-    ImmutableList<Artifact> outputSourceJars = ImmutableList.of(outputSourceJar);
-
-    NestedSetBuilder<Artifact> transitiveSourceJars =
-        NestedSetBuilder.<Artifact>stableOrder().addAll(outputSourceJars);
-    for (JavaSourceJarsProvider sourceJarsProvider :
-        JavaInfo.getProvidersFromListOfJavaProviders(JavaSourceJarsProvider.class, deps)) {
-      transitiveSourceJars.addTransitive(sourceJarsProvider.getTransitiveSourceJars());
-    }
-
     return JavaInfo.Builder.create()
-        .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
-        .addProvider(JavaSourceJarsProvider.class,
-            createJavaSourceJarsProvider(outputSourceJars, transitiveSourceJars.build()))
-        .addProvider(JavaRuleOutputJarsProvider.class, outputJarsBuilder.build())
-        .addProvider(JavaRunfilesProvider.class, new JavaRunfilesProvider(runfiles))
-        .addProvider(JavaPluginInfoProvider.class, transitivePluginsProvider)
-        .build();
+             .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
+             .addProvider(JavaSourceJarsProvider.class, createJavaSourceJarsProvider(sourceJars))
+             .addProvider(JavaRuleOutputJarsProvider.class, javaRuleOutputJarsProvider)
+             .addProvider(JavaRunfilesProvider.class, new JavaRunfilesProvider(runfiles))
+             .addProvider(JavaPluginInfoProvider.class, transitivePluginsProvider)
+             .build();
   }
 
-  private static Artifact getSourceJar(SkylarkRuleContext skylarkRuleContext) throws EvalException {
-    return skylarkRuleContext.getRuleContext()
-        .getBinArtifact("lib" + skylarkRuleContext.getLabel().getName() + "-src.jar");
-  }
-
-  private static Artifact buildIjar(
-      SkylarkActionFactory actions,
-      Artifact inputJar,
+  @SkylarkCallable(
+      name = "build_ijar",
+      documented = true,
+      doc = "Builds and returns the ijar file for the given jar file.",
+      mandatoryPositionals = 1,
+      parameters = {
+        @Param(
+          name = "jar",
+          positional = true,
+          named = true,
+          type = Artifact.class,
+          doc = "The input .jar file for which an ijar will be built. Mandatory."
+        ),
+        @Param(
+          name = "java_toolchain",
+          positional = true,
+          named = true,
+          type = ConfiguredTarget.class,
+          doc = "A label pointing to a java_toolchain rule to be used for this compilation. "
+            + "Mandatory."
+        ),
+      }
+  )
+  public Artifact buildIjar(
+      SkylarkRuleContext skylarkRuleContext,
+      Artifact fullJar,
       ConfiguredTarget javaToolchain) throws EvalException {
-    String ijarBasename = FileSystemUtils.removeExtension(inputJar.getFilename()) + "-ijar.jar";
-    Artifact interfaceJar = actions.declareFile(ijarBasename, inputJar);
-    FilesToRunProvider ijarTarget = getJavaToolchainProvider(javaToolchain).getIjar();
-    SpawnAction.Builder actionBuilder = new Builder()
-        .addInput(inputJar)
-        .addOutput(interfaceJar)
-        .setExecutable(ijarTarget)
-        .setProgressMessage("Extracting interface for jar %s", inputJar.getFilename())
-        .addCommandLine(CustomCommandLine.builder()
-            .addExecPath(inputJar)
-            .addExecPath(interfaceJar)
-            .build())
-      .useDefaultShellEnvironment()
-      .setMnemonic("JavaIjar");
-    actions.registerAction(actionBuilder.build(actions.getActionConstructionContext()));
-    return interfaceJar;
+    return JavaCompilationHelper.createIjarAction(
+        skylarkRuleContext.getRuleContext(),
+        getJavaToolchainProvider(javaToolchain),
+        fullJar,
+        /* addPrefix = */ true);
   }
+
   /**
-   * Creates a {@link JavaSourceJarsProvider} from the given lists of source jars.
+   * Creates a {@link JavaSourceJarsProvider} from the given list of source jars.
    */
-  private static JavaSourceJarsProvider createJavaSourceJarsProvider(
-      List<Artifact> sourceJars, NestedSet<Artifact> transitiveSourceJars) {
+  private static JavaSourceJarsProvider createJavaSourceJarsProvider(List<Artifact> sourceJars) {
     NestedSet<Artifact> javaSourceJars =
         NestedSetBuilder.<Artifact>stableOrder().addAll(sourceJars).build();
-    return JavaSourceJarsProvider.create(transitiveSourceJars, javaSourceJars);
+    return JavaSourceJarsProvider.create(
+        NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars);
   }
 
   @SkylarkCallable(
@@ -533,17 +437,8 @@ public class JavaSkylarkCommon {
     ConfiguredTarget javaToolchainConfigTarget =
         (ConfiguredTarget) skylarkRuleContext.getAttr().getValue(javaToolchainAttr);
     JavaToolchainProvider toolchain = getJavaToolchainProvider(javaToolchainConfigTarget);
-    ImmutableList<String> javacOptsFromAttr;
-    if (ruleContext.getRule().isAttrDefined("javacopts", Type.STRING_LIST)) {
-      javacOptsFromAttr = ruleContext.getExpander().withDataLocations().tokenized("javacopts");
-    } else {
-      // This can also be called from Skylark rules that may or may not have an appropriate
-      // javacopts attribute.
-      javacOptsFromAttr = ImmutableList.of();
-    }
     return ImmutableList.copyOf(Iterables.concat(
-        toolchain.getJavacOptions(),
-        javacOptsFromAttr));
+        toolchain.getJavacOptions(), ruleContext.getTokenizedStringListAttr("javacopts")));
   }
 
   @SkylarkCallable(
@@ -578,10 +473,9 @@ public class JavaSkylarkCommon {
   private static JavaToolchainProvider getJavaToolchainProvider(ConfiguredTarget javaToolchain)
       throws EvalException{
     JavaToolchainProvider javaToolchainProvider =
-        JavaToolchainProvider.from(javaToolchain);
+        javaToolchain.getProvider(JavaToolchainProvider.class);
     if (javaToolchainProvider == null) {
-      throw new EvalException(
-          null, javaToolchain.getLabel() + " does not provide JavaToolchainProvider.");
+      throw new EvalException(null, javaToolchain.getLabel() + " is not a java_toolchain rule.");
     }
     return javaToolchainProvider;
   }

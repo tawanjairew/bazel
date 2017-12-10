@@ -48,6 +48,6 @@ public class BazelRulesModule extends BlazeModule {
   @Override
   public void workspaceInit(
       BlazeRuntime runtime, BlazeDirectories directories, WorkspaceBuilder builder) {
-    builder.addSkyFunction(FdoSupportValue.SKYFUNCTION, new FdoSupportFunction(directories));
+    builder.addSkyFunction(FdoSupportValue.SKYFUNCTION, new FdoSupportFunction());
   }
 }

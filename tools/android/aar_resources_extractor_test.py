@@ -23,10 +23,6 @@ import zipfile
 from tools.android import aar_resources_extractor
 
 
-def _HostPath(path):
-  return os.path.normpath(path)
-
-
 class AarResourcesExtractorTest(unittest.TestCase):
   """Unit tests for aar_resources_extractor.py."""
 
@@ -37,16 +33,14 @@ class AarResourcesExtractorTest(unittest.TestCase):
     shutil.rmtree("out_dir")
 
   def DirContents(self, d):
-    return [
-        _HostPath(path + "/" + f)
-        for (path, _, files) in os.walk(d) for f in files
-    ]
+    return [path + "/" + f for (path, _, files) in os.walk(d)
+            for f in files]
 
   def testNoResources(self):
     aar = zipfile.ZipFile(StringIO.StringIO(), "w")
     os.makedirs("out_dir")
     aar_resources_extractor.ExtractResources(aar, "out_dir")
-    self.assertEqual([_HostPath("out_dir/res/values/empty.xml")],
+    self.assertEqual(["out_dir/res/values/empty.xml"],
                      self.DirContents("out_dir"))
     with open("out_dir/res/values/empty.xml", "r") as empty_xml:
       self.assertEqual("<resources/>", empty_xml.read())
@@ -57,10 +51,8 @@ class AarResourcesExtractorTest(unittest.TestCase):
     aar.writestr("res/layouts/layout.xml", "some layout")
     os.makedirs("out_dir")
     aar_resources_extractor.ExtractResources(aar, "out_dir")
-    expected_resources = [
-        _HostPath("out_dir/res/values/values.xml"),
-        _HostPath("out_dir/res/layouts/layout.xml")
-    ]
+    expected_resources = ["out_dir/res/values/values.xml",
+                          "out_dir/res/layouts/layout.xml"]
     self.assertItemsEqual(expected_resources, self.DirContents("out_dir"))
     with open("out_dir/res/values/values.xml", "r") as values_xml:
       self.assertEqual("some values", values_xml.read())

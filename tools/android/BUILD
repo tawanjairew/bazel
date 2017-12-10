@@ -90,7 +90,6 @@ py_binary(
         "aar_native_libs_zip_creator.py",
     ],
     deps = [
-        ":junction_lib",
         "//third_party/py/gflags",
     ],
 )
@@ -124,10 +123,7 @@ py_test(
 py_binary(
     name = "aar_embedded_jars_extractor",
     srcs = ["aar_embedded_jars_extractor.py"],
-    deps = [
-        ":junction_lib",
-        "//third_party/py/gflags",
-    ],
+    deps = ["//third_party/py/gflags"],
 )
 
 py_test(
@@ -171,13 +167,13 @@ py_library(
 py_test(
     name = "junction_test",
     srcs = select({
-        "//src/conditions:windows": ["junction_test.py"],
-        "//src/conditions:windows_msvc": ["junction_test.py"],
+        "//src:windows": ["junction_test.py"],
+        "//src:windows_msvc": ["junction_test.py"],
         "//conditions:default": ["dummy_test.py"],
     }),
     main = select({
-        "//src/conditions:windows": "junction_test.py",
-        "//src/conditions:windows_msvc": "junction_test.py",
+        "//src:windows": "junction_test.py",
+        "//src:windows_msvc": "junction_test.py",
         "//conditions:default": "dummy_test.py",
     }),
     deps = [

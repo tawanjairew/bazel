@@ -1,21 +1,25 @@
 package org.checkerframework.dataflow.cfg.node;
 
-import com.sun.source.tree.InstanceOfTree;
-import com.sun.source.tree.Tree;
 import java.util.Collection;
 import java.util.Collections;
+
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
+
 import org.checkerframework.dataflow.util.HashCodeUtils;
+
+import com.sun.source.tree.InstanceOfTree;
+import com.sun.source.tree.Tree;
 
 /**
  * A node for the instanceof operator:
  *
- * <p><em>x</em> instanceof <em>Point</em>
+ * <em>x</em> instanceof <em>Point</em>
  *
  * @author Stefan Heule
  * @author Charlie Garrett
+ *
  */
 public class InstanceOfNode extends Node {
 
@@ -72,7 +76,8 @@ public class InstanceOfNode extends Node {
         InstanceOfNode other = (InstanceOfNode) obj;
         // TODO: TypeMirror.equals may be too restrictive.
         // Check whether Types.isSameType is the better comparison.
-        return getOperand().equals(other.getOperand()) && getRefType().equals(other.getRefType());
+        return getOperand().equals(other.getOperand())
+                && getRefType().equals(other.getRefType());
     }
 
     @Override

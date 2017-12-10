@@ -26,7 +26,7 @@ class Splitter {
   private final Map<String, Integer> assigned;
   private int size = 0;
   private int shard = 0;
-  private String prevPath = null;
+  private String currPath = null;
   private int remaining;
   private int idealSize;
   private int almostFull;
@@ -85,7 +85,7 @@ class Splitter {
     // Before you change this, please do the math.
     // It's not always perfect, but designed to keep shards reasonably balanced in most cases.
     int limit = Math.min(Math.min(10, (idealSize + 3) / 4), (int) Math.log(numberOfShards));
-    almostFull = idealSize - limit;
+    almostFull = idealSize -  limit;
   }
 
   /**
@@ -102,7 +102,7 @@ class Splitter {
     // last shard, no choice
     if (shard == numberOfShards - 1) {
       size++;
-      assigned.put(path, shard);
+      assigned.put(currPath, shard);
       return shard;
     }
 
@@ -112,26 +112,23 @@ class Splitter {
         nextShard();
       }
       size++;
-      assigned.put(path, shard);
+      assigned.put(currPath, shard);
       return shard;
     }
 
-    // If current shard is "over-full", forcibly roll over. Otherwise, if current shard is
-    // "almost full", check for package boundary. The forced rollover is in particular important
-    // when all or almost all classes are in the default package, as Proguard likes to make it.
-    if (size >= (idealSize + (idealSize - almostFull))) {
-      nextShard();
-    } else if (prevPath != null && size >= almostFull) {
-      int i = path.lastIndexOf(ARCHIVE_FILE_SEPARATOR);
-      String dir = i > 0 ? path.substring(0, i) : ".";
+    String prevPath = currPath;
+    currPath = path;
+    // If current shard is at least "almost full", check for package boundary?
+    if (prevPath != null && size >= almostFull) {
+      int i = currPath.lastIndexOf(ARCHIVE_FILE_SEPARATOR);
+      String dir = i > 0 ? currPath.substring(0, i) : ".";
       i = prevPath.lastIndexOf(ARCHIVE_FILE_SEPARATOR);
       String prevDir = i > 0 ? prevPath.substring(0, i) : ".";
       if (!dir.equals(prevDir)) {
         nextShard();
       }
     }
-    prevPath = path;
-    assigned.put(path, shard);
+    assigned.put(currPath, shard);
     size++;
     return shard;
   }

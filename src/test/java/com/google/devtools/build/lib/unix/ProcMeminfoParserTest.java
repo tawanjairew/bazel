@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.unix;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.util.FsApparatus;
@@ -32,11 +32,10 @@ public class ProcMeminfoParserTest {
   private FsApparatus scratch = FsApparatus.newNative();
 
   @Test
-  public void memInfo() throws IOException, ProcMeminfoParser.KeywordNotFoundException {
+  public void memInfo() throws IOException {
     String meminfoContent = StringUtilities.joinLines(
         "MemTotal:      3091732 kB",
         "MemFree:       2167344 kB",
-        "MemAvailable:   14717640 kB",
         "Buffers:         60644 kB",
         "Cached:         509940 kB",
         "SwapCached:          0 kB",
@@ -73,26 +72,20 @@ public class ProcMeminfoParserTest {
     String meminfoFile = scratch.file("test_meminfo", meminfoContent).getPathString();
     ProcMeminfoParser memInfo = new ProcMeminfoParser(meminfoFile);
 
-    assertThat(memInfo.getFreeRamKb()).isEqualTo(14717640);
+    assertThat(memInfo.getFreeRamKb()).isEqualTo(2356756);
     assertThat(memInfo.getRamKb("Cached")).isEqualTo(509940);
     assertThat(memInfo.getTotalKb()).isEqualTo(3091732);
-    assertThrows(ProcMeminfoParser.KeywordNotFoundException.class,
-        () -> memInfo.getRamKb("Bogus"));
-    assertThrows(ProcMeminfoParser.KeywordNotFoundException.class,
-        () -> memInfo.getRamKb("Bogus2"));
+    assertNotAvailable("Bogus", memInfo);
+    assertNotAvailable("Bogus2", memInfo);
   }
 
-  @Test
-  public void testOldKernelFallback() throws Exception {
-    String meminfoContent =
-        StringUtilities.joinLines(
-            "MemTotal:      3091732 kB",
-            "Active:         636892 kB",
-            "Inactive:       212760 kB",
-            "Slab:            42820 kB");
-
-    String meminfoFile = scratch.file("test_meminfo", meminfoContent).getPathString();
-    ProcMeminfoParser memInfo = new ProcMeminfoParser(meminfoFile);
-    assertThat(memInfo.getFreeRamKb()).isEqualTo(2356756);
+  private static void assertNotAvailable(String field, ProcMeminfoParser memInfo) {
+    try {
+      memInfo.getRamKb(field);
+      fail();
+    } catch (IllegalArgumentException e) {
+      // Expected.
+    }
   }
+
 }

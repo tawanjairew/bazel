@@ -42,10 +42,9 @@ class InterfaceDesugaring extends ClassVisitor {
   static final String COMPANION_METHOD_TO_TRIGGER_INTERFACE_CLINIT_NAME = "$$triggerInterfaceInit";
   static final String COMPANION_METHOD_TO_TRIGGER_INTERFACE_CLINIT_DESC = "()V";
 
+  static final String COMPANION_SUFFIX = "$$CC";
   static final String INTERFACE_STATIC_COMPANION_METHOD_SUFFIX = "$$STATIC$$";
 
-  private final ClassVsInterface interfaceCache;
-  private final DependencyCollector depsCollector;
   private final ClassReaderFactory bootclasspath;
   private final GeneratedClassStore store;
   private final boolean legacyJaCoCo;
@@ -53,20 +52,13 @@ class InterfaceDesugaring extends ClassVisitor {
   private String internalName;
   private int bytecodeVersion;
   private int accessFlags;
-  private int numberOfDefaultMethods;
   @Nullable private ClassVisitor companion;
   @Nullable private FieldInfo interfaceFieldToAccessInCompanionMethodToTriggerInterfaceClinit;
 
   public InterfaceDesugaring(
-      ClassVisitor dest,
-      ClassVsInterface interfaceCache,
-      DependencyCollector depsCollector,
-      ClassReaderFactory bootclasspath,
-      GeneratedClassStore store,
+      ClassVisitor dest, ClassReaderFactory bootclasspath, GeneratedClassStore store,
       boolean legacyJaCoCo) {
-    super(Opcodes.ASM6, dest);
-    this.interfaceCache = interfaceCache;
-    this.depsCollector = depsCollector;
+    super(Opcodes.ASM5, dest);
     this.bootclasspath = bootclasspath;
     this.store = store;
     this.legacyJaCoCo = legacyJaCoCo;
@@ -81,30 +73,15 @@ class InterfaceDesugaring extends ClassVisitor {
       String superName,
       String[] interfaces) {
     companion = null;
-    numberOfDefaultMethods = 0;
     internalName = name;
     bytecodeVersion = version;
     accessFlags = access;
-    if (isInterface()) {
-      interfaceCache.addKnownInterfaces(name);
-      // Record interface hierarchy.  This helps avoid parsing .class files when double-checking
-      // desugaring results later using collected dependency information.
-      depsCollector.recordExtendedInterfaces(name, interfaces);
-    } else {
-      interfaceCache.addKnownClass(name);
-    }
-    interfaceCache.addKnownClass(superName).addKnownInterfaces(interfaces);
     super.visit(version, access, name, signature, superName, interfaces);
   }
 
   @Override
   public void visitEnd() {
     if (companion != null) {
-      // Record classes with default methods.  This increases precision when double-checking
-      // desugaring results later, without parsing .class files again, compared to just looking
-      // for companion classes in a given desugared Jar which may only contain static methods.
-      depsCollector.recordDefaultMethods(internalName, numberOfDefaultMethods);
-
       // Emit a method to access the fields of the interfaces that need initialization.
       emitInterfaceFieldAccessInCompanionMethodToTriggerInterfaceClinit();
       companion.visitEnd();
@@ -167,7 +144,6 @@ class InterfaceDesugaring extends ClassVisitor {
   @Override
   public MethodVisitor visitMethod(
       int access, String name, String desc, String signature, String[] exceptions) {
-    String codeOwner = internalName;
     MethodVisitor result;
     if (isInterface() && isStaticInitializer(name)) {
       result =
@@ -181,14 +157,14 @@ class InterfaceDesugaring extends ClassVisitor {
       checkArgument(BitFlags.noneSet(access, Opcodes.ACC_NATIVE), "Forbidden per JLS ch 9.4");
 
       boolean isLambdaBody =
-          name.startsWith("lambda$") && BitFlags.isSynthetic(access);
+          name.startsWith("lambda$") && BitFlags.isSet(access, Opcodes.ACC_SYNTHETIC);
       if (isLambdaBody) {
         access &= ~Opcodes.ACC_PUBLIC; // undo visibility change from LambdaDesugaring
       }
-      name = normalizeInterfaceMethodName(name, isLambdaBody, BitFlags.isStatic(access));
-      codeOwner = getCompanionClassName(internalName);
-
-      if (BitFlags.isStatic(access)) {
+      name =
+          normalizeInterfaceMethodName(
+              name, isLambdaBody, BitFlags.isSet(access, Opcodes.ACC_STATIC));
+      if (BitFlags.isSet(access, Opcodes.ACC_STATIC)) {
         // Completely move static interface methods, which requires rewriting call sites
         result =
             companion()
@@ -209,7 +185,6 @@ class InterfaceDesugaring extends ClassVisitor {
               name,
               internalName,
               desc);
-          ++numberOfDefaultMethods;
           abstractDest =
               super.visitMethod(access | Opcodes.ACC_ABSTRACT, name, desc, signature, exceptions);
         }
@@ -234,31 +209,12 @@ class InterfaceDesugaring extends ClassVisitor {
     }
     return result != null
         ? new InterfaceInvocationRewriter(
-            result, isInterface() ? internalName : null, bootclasspath, depsCollector, codeOwner)
+            result, isInterface() ? internalName : null, bootclasspath)
         : null;
   }
 
-  @Override
-  public void visitOuterClass(String owner, String name, String desc) {
-    // Proguard gets grumpy if an outer method doesn't exist, which can be the result of moving
-    // interface methods to companion classes (b/68260836).  In that case (for which we need to
-    // figure out if "owner" is an interface) need to adjust the outer method information.
-    if (name != null && interfaceCache.isOuterInterface(owner, internalName)) {
-      // Just drop outer method info.  That's unfortunate, but the only alternative would be to
-      // change the outer method to point to the companion class, which would mean the
-      // reflection methods that use this information would return a companion ($$CC) class name
-      // as well as a possibly-modified method name and signature, so it seems better to return
-      // the correct original interface name and no method information.  Doing this also saves
-      // us from doing even more work to figure out whether the method is static and a lambda
-      // method, which we'd need to known to adjust name and descriptor correctly.
-      name = null;
-      desc = null;
-    } // otherwise there's no enclosing method that could've been moved, or owner is a class
-    super.visitOuterClass(owner, name, desc);
-  }
-
   private boolean isInterface() {
-    return BitFlags.isInterface(accessFlags);
+    return BitFlags.isSet(accessFlags, Opcodes.ACC_INTERFACE);
   }
 
   private static boolean isStaticInitializer(String methodName) {
@@ -267,20 +223,22 @@ class InterfaceDesugaring extends ClassVisitor {
 
   private static String normalizeInterfaceMethodName(
       String name, boolean isLambda, boolean isStatic) {
+    String suffix;
     if (isLambda) {
       // Rename lambda method to reflect the new owner.  Not doing so confuses LambdaDesugaring
       // if it's run over this class again. LambdaDesugaring has already renamed the method from
       // its original name to include the interface name at this point.
-      return name + DependencyCollector.INTERFACE_COMPANION_SUFFIX;
+      suffix = COMPANION_SUFFIX;
     } else if (isStatic) {
-      return name + INTERFACE_STATIC_COMPANION_METHOD_SUFFIX;
+      suffix = INTERFACE_STATIC_COMPANION_METHOD_SUFFIX;
     } else {
       return name;
     }
+    return name + suffix;
   }
 
   static String getCompanionClassName(String interfaceName) {
-    return interfaceName + DependencyCollector.INTERFACE_COMPANION_SUFFIX;
+    return interfaceName + COMPANION_SUFFIX;
   }
 
   /**
@@ -321,7 +279,7 @@ class InterfaceDesugaring extends ClassVisitor {
   private class InterfaceFieldWriteCollector extends MethodVisitor {
 
     public InterfaceFieldWriteCollector(MethodVisitor mv) {
-      super(Opcodes.ASM6, mv);
+      super(Opcodes.ASM5, mv);
     }
 
     @Override
@@ -355,33 +313,25 @@ class InterfaceDesugaring extends ClassVisitor {
     @Nullable private final String interfaceName;
 
     private final ClassReaderFactory bootclasspath;
-    private final DependencyCollector depsCollector;
-    /** Internal name that'll be used to record any dependencies on interface methods. */
-    private final String declaringClass;
 
     public InterfaceInvocationRewriter(
-        MethodVisitor dest,
-        @Nullable String knownInterfaceName,
-        ClassReaderFactory bootclasspath,
-        DependencyCollector depsCollector,
-        String declaringClass) {
-      super(Opcodes.ASM6, dest);
+        MethodVisitor dest, @Nullable String knownInterfaceName, ClassReaderFactory bootclasspath) {
+      super(Opcodes.ASM5, dest);
       this.interfaceName = knownInterfaceName;
       this.bootclasspath = bootclasspath;
-      this.depsCollector = depsCollector;
-      this.declaringClass = declaringClass;
     }
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
       // Assume that any static interface methods on the classpath are moved
-      if ((itf || owner.equals(interfaceName)) && !bootclasspath.isKnown(owner)) {
+      if (itf || owner.equals(interfaceName)) {
         boolean isLambda = name.startsWith("lambda$");
         name = normalizeInterfaceMethodName(name, isLambda, opcode == Opcodes.INVOKESTATIC);
         if (isLambda) {
           // Redirect lambda invocations to completely remove all lambda methods from interfaces.
-          checkArgument(!owner.endsWith(DependencyCollector.INTERFACE_COMPANION_SUFFIX),
-              "shouldn't consider %s an interface", owner);
+          checkArgument(
+              !owner.endsWith(COMPANION_SUFFIX), "shouldn't consider %s an interface", owner);
+          checkArgument(!bootclasspath.isKnown(owner)); // must be in current input
           if (opcode == Opcodes.INVOKEINTERFACE) {
             opcode = Opcodes.INVOKESTATIC;
             desc = companionDefaultMethodDescriptor(owner, desc);
@@ -394,11 +344,7 @@ class InterfaceDesugaring extends ClassVisitor {
                 name);
           }
           // Reflect that InterfaceDesugaring moves and renames the lambda body method
-          owner += DependencyCollector.INTERFACE_COMPANION_SUFFIX;
-          itf = false;
-          // Record dependency on companion class
-          depsCollector.assumeCompanionClass(declaringClass, owner);
-
+          owner += COMPANION_SUFFIX;
           String expectedLambdaMethodName = LambdaDesugaring.uniqueInPackage(owner, name);
           checkState(
               name.equals(expectedLambdaMethodName),
@@ -406,18 +352,18 @@ class InterfaceDesugaring extends ClassVisitor {
               owner,
               name,
               expectedLambdaMethodName);
-        } else if ((opcode == Opcodes.INVOKESTATIC || opcode == Opcodes.INVOKESPECIAL)) {
-          checkArgument(!owner.endsWith(DependencyCollector.INTERFACE_COMPANION_SUFFIX),
-              "shouldn't consider %s an interface", owner);
+          itf = false;
+        } else if ((opcode == Opcodes.INVOKESTATIC || opcode == Opcodes.INVOKESPECIAL)
+            && !bootclasspath.isKnown(owner)) {
+          checkArgument(
+              !owner.endsWith(COMPANION_SUFFIX), "shouldn't consider %s an interface", owner);
           if (opcode == Opcodes.INVOKESPECIAL) {
             // Turn Interface.super.m() into Interface$$CC.m(receiver)
             opcode = Opcodes.INVOKESTATIC;
             desc = companionDefaultMethodDescriptor(owner, desc);
           }
-          owner += DependencyCollector.INTERFACE_COMPANION_SUFFIX;
+          owner += COMPANION_SUFFIX;
           itf = false;
-          // Record dependency on companion class
-          depsCollector.assumeCompanionClass(declaringClass, owner);
         }
       }
       super.visitMethodInsn(opcode, owner, name, desc, itf);
@@ -432,14 +378,13 @@ class InterfaceDesugaring extends ClassVisitor {
   private static class MoveJacocoFieldAccess extends MethodVisitor {
 
     public MoveJacocoFieldAccess(MethodVisitor mv) {
-      super(Opcodes.ASM6, mv);
+      super(Opcodes.ASM5, mv);
     }
 
     @Override
     public void visitFieldInsn(int opcode, String owner, String name, String desc) {
       if ("$jacocoData".equals(name)) {
-        checkState(!owner.endsWith(DependencyCollector.INTERFACE_COMPANION_SUFFIX),
-            "Expected interface: %s", owner);
+        checkState(!owner.endsWith(COMPANION_SUFFIX), "Expected interface: %s", owner);
         owner = getCompanionClassName(owner);
       }
       super.visitFieldInsn(opcode, owner, name, desc);
@@ -455,7 +400,7 @@ class InterfaceDesugaring extends ClassVisitor {
     private final MethodVisitor annotationOnlyDest;
 
     public MultiplexAnnotations(@Nullable MethodVisitor dest, MethodVisitor annotationOnlyDest) {
-      super(Opcodes.ASM6, dest);
+      super(Opcodes.ASM5, dest);
       this.annotationOnlyDest = annotationOnlyDest;
     }
 
@@ -500,7 +445,7 @@ class InterfaceDesugaring extends ClassVisitor {
 
     public MultiplexAnnotationVisitor(
         @Nullable AnnotationVisitor dest, AnnotationVisitor... moreDestinations) {
-      super(Opcodes.ASM6, dest);
+      super(Opcodes.ASM5, dest);
       this.moreDestinations = moreDestinations;
     }
 

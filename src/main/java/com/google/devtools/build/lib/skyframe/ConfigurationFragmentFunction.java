@@ -44,15 +44,12 @@ import java.io.IOException;
 public final class ConfigurationFragmentFunction implements SkyFunction {
   private final Supplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments;
   private final RuleClassProvider ruleClassProvider;
-  private final BlazeDirectories directories;
 
   public ConfigurationFragmentFunction(
       Supplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments,
-      RuleClassProvider ruleClassProvider,
-      BlazeDirectories directories) {
+      RuleClassProvider ruleClassProvider) {
     this.configurationFragments = configurationFragments;
     this.ruleClassProvider = ruleClassProvider;
-    this.directories = directories;
   }
 
   @Override
@@ -63,8 +60,8 @@ public final class ConfigurationFragmentFunction implements SkyFunction {
     BuildOptions buildOptions = configurationFragmentKey.getBuildOptions();
     ConfigurationFragmentFactory factory = getFactory(configurationFragmentKey.getFragmentType());
     try {
-      PackageProviderForConfigurations packageProvider =
-          new SkyframePackageLoaderWithValueEnvironment(env, ruleClassProvider, directories);
+      PackageProviderForConfigurations packageProvider = 
+          new SkyframePackageLoaderWithValueEnvironment(env, ruleClassProvider);
       ConfigurationEnvironment confEnv = new ConfigurationBuilderEnvironment(packageProvider);
       Fragment fragment = factory.create(confEnv, buildOptions);
 

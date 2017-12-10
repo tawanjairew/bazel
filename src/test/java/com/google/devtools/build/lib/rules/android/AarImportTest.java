@@ -21,13 +21,12 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import java.util.Set;
@@ -59,7 +58,7 @@ public class AarImportTest extends BuildViewTestCase {
         ")",
         "android_library(",
         "    name = 'lib',",
-        "    exports = ['//a:bar'],",
+        "    deps = ['//a:bar'],",
         ")",
         "java_import(",
         "    name = 'baz',",
@@ -153,7 +152,7 @@ public class AarImportTest extends BuildViewTestCase {
     ConfiguredTarget aarImportTarget = getConfiguredTarget("//a:foo");
 
     Iterable<OutputJar> outputJars =
-        JavaInfo.getProvider(JavaRuleOutputJarsProvider.class, aarImportTarget).getOutputJars();
+        aarImportTarget.getProvider(JavaRuleOutputJarsProvider.class).getOutputJars();
     assertThat(outputJars).hasSize(1);
 
     Artifact classesJar = outputJars.iterator().next().getClassJar();
@@ -225,8 +224,8 @@ public class AarImportTest extends BuildViewTestCase {
   public void testJavaCompilationArgsProvider() throws Exception {
     ConfiguredTarget aarImportTarget = getConfiguredTarget("//a:bar");
 
-    JavaCompilationArgsProvider provider = JavaInfo
-        .getProvider(JavaCompilationArgsProvider.class, aarImportTarget);
+    JavaCompilationArgsProvider provider = aarImportTarget
+        .getProvider(JavaCompilationArgsProvider.class);
     assertThat(provider).isNotNull();
     assertThat(artifactsToStrings(provider.getJavaCompilationArgs().getRuntimeJars()))
         .containsExactly(
@@ -255,22 +254,16 @@ public class AarImportTest extends BuildViewTestCase {
   public void testExportsManifest() throws Exception {
     Artifact binaryMergedManifest =
         getConfiguredTarget("//java:app").getProvider(ApkProvider.class).getMergedManifest();
-    // Compare root relative path strings instead of artifacts due to difference in configuration
-    // caused by the Android split transition.
-    assertThat(
-        Iterables.transform(
-            getGeneratingAction(binaryMergedManifest).getInputs(),
-            Artifact::getRootRelativePathString))
+    assertThat(getGeneratingAction(binaryMergedManifest).getInputs())
         .containsAllOf(getAndroidManifest("//a:foo"), getAndroidManifest("//a:bar"));
   }
 
-  private String getAndroidManifest(String aarImport) throws Exception {
+  private Artifact getAndroidManifest(String aarImport) throws Exception {
     return getConfiguredTarget(aarImport)
         .getProvider(AndroidResourcesProvider.class)
         .getDirectAndroidResources()
         .toList()
         .get(0)
-        .getManifest()
-        .getRootRelativePathString();
+        .getManifest();
   }
 }

@@ -27,7 +27,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -165,13 +164,6 @@ public class AaptCommandBuilder {
     return flags.build();
   }
 
-  public AaptCommandBuilder add(String flag, Optional<Path> optionalPath) {
-    Preconditions.checkNotNull(flag);
-    Preconditions.checkNotNull(optionalPath);
-    optionalPath.map(p -> add(flag, p));
-    return this;
-  }
-
   /** Wrapper for potentially adding flags to an AaptCommandBuilder based on a conditional. */
   public interface ConditionalAaptCommandBuilder {
     /**
@@ -196,14 +188,6 @@ public class AaptCommandBuilder {
      * @see AaptCommandBuilder#add(String,Path)
      */
     AaptCommandBuilder thenAdd(String flag, @Nullable Path value);
-
-    /**
-     * Adds a single flag and associated path value to the builder if the value is non-null and the
-     * condition was true.
-     *
-     * @see AaptCommandBuilder#add(String,Optional)
-     */
-    AaptCommandBuilder thenAdd(String flag, Optional<Path> value);
 
     /**
      * Adds the values in the collection to the builder, each preceded by the given flag, if the
@@ -240,11 +224,6 @@ public class AaptCommandBuilder {
     }
 
     @Override
-    public AaptCommandBuilder thenAdd(String flag, @Nullable Optional<Path> value) {
-      return originalCommandBuilder.add(flag, value);
-    }
-
-    @Override
     public AaptCommandBuilder thenAddRepeated(String flag, Collection<String> values) {
       return originalCommandBuilder.addRepeated(flag, values);
     }
@@ -277,13 +256,6 @@ public class AaptCommandBuilder {
     }
 
     @Override
-    public AaptCommandBuilder thenAdd(String flag, Optional<Path> value) {
-      Preconditions.checkNotNull(flag);
-      Preconditions.checkNotNull(value);
-      return originalCommandBuilder;
-    }
-
-    @Override
     public AaptCommandBuilder thenAddRepeated(String flag, Collection<String> values) {
       Preconditions.checkNotNull(flag);
       Preconditions.checkNotNull(values);
@@ -302,15 +274,11 @@ public class AaptCommandBuilder {
 
     final Process process = new ProcessBuilder().command(command).redirectErrorStream(true).start();
     processLog.append("Command: ");
-    Joiner.on("\\\n\t").appendTo(processLog, command);
-    processLog.append("\nOutput:\n");
+    Joiner.on("\n\t").appendTo(processLog, command);
+    processLog.append("\n");
     final InputStreamReader stdout =
         new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8);
     while (process.isAlive()) {
-      processLog.append(CharStreams.toString(stdout));
-    }
-    // Make sure the full stdout is read.
-    while (stdout.ready()) {
       processLog.append(CharStreams.toString(stdout));
     }
     if (process.exitValue() != 0) {

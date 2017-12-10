@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.ProgressEvent;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.CommandLineEvent;
 import java.util.Collection;
 
 /**
@@ -83,10 +82,7 @@ public final class BuildStartingEvent implements BuildEvent {
   public Collection<BuildEventId> getChildrenEvents() {
     return ImmutableList.of(
         ProgressEvent.INITIAL_PROGRESS_UPDATE,
-        BuildEventId.unstructuredCommandlineId(),
-        BuildEventId.structuredCommandlineId(CommandLineEvent.OriginalCommandLineEvent.LABEL),
-        BuildEventId.structuredCommandlineId(CommandLineEvent.CanonicalCommandLineEvent.LABEL),
-        BuildEventId.structuredCommandlineId(CommandLineEvent.ToolCommandLineEvent.LABEL),
+        BuildEventId.commandlineId(),
         BuildEventId.optionsParsedId(),
         BuildEventId.workspaceStatusId(),
         BuildEventId.targetPatternExpanded(request.getTargets()),

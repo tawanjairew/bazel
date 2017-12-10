@@ -1,13 +1,17 @@
 package org.checkerframework.dataflow.cfg.node;
 
-import com.sun.source.tree.ExpressionTree;
-import com.sun.source.tree.Tree;
 import java.util.Collection;
 import java.util.Collections;
+
 import javax.lang.model.element.ExecutableElement;
+
 import org.checkerframework.dataflow.util.HashCodeUtils;
+
 import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
+
+import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.Tree;
 
 /**
  * A node for a method access, including a method accesses:
@@ -17,6 +21,7 @@ import org.checkerframework.javacutil.TreeUtils;
  * </pre>
  *
  * @author Stefan Heule
+ *
  */
 public class MethodAccessNode extends Node {
 
@@ -63,7 +68,8 @@ public class MethodAccessNode extends Node {
             return false;
         }
         MethodAccessNode other = (MethodAccessNode) obj;
-        return getReceiver().equals(other.getReceiver()) && getMethod().equals(other.getMethod());
+        return getReceiver().equals(other.getReceiver())
+                && getMethod().equals(other.getMethod());
     }
 
     @Override

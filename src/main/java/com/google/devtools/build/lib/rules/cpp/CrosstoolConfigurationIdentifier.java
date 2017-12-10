@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -38,9 +37,8 @@ public final class CrosstoolConfigurationIdentifier implements CrosstoolConfigur
   /** The version of libc (e.g. glibc-2.11) associated with this crosstool configuration. */
   private final String libc;
 
-  /** Creates a new {@link CrosstoolConfigurationIdentifier} with the given parameters. */
-  CrosstoolConfigurationIdentifier(String cpu, String compiler, String libc) {
-    this.cpu = Preconditions.checkNotNull(cpu);
+  private CrosstoolConfigurationIdentifier(String cpu, String compiler, String libc) {
+    this.cpu = cpu;
     this.compiler = compiler;
     this.libc = libc;
   }

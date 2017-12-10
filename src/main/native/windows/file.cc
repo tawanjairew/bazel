@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <stdint.h>  // uint8_t
 #include <windows.h>
 
 #include <memory>
@@ -25,6 +24,7 @@
 namespace bazel {
 namespace windows {
 
+using std::string;
 using std::unique_ptr;
 using std::wstring;
 
@@ -42,16 +42,14 @@ int IsJunctionOrDirectorySymlink(const WCHAR* path) {
   }
 }
 
-wstring GetLongPath(const WCHAR* path, unique_ptr<WCHAR[]>* result) {
+bool GetLongPath(const WCHAR* path, unique_ptr<WCHAR[]>* result) {
   DWORD size = ::GetLongPathNameW(path, NULL, 0);
   if (size == 0) {
-    DWORD err_code = GetLastError();
-    return MakeErrorMessage(WSTR(__FILE__), __LINE__, L"GetLongPathNameW", path,
-                            err_code);
+    return false;
   }
   result->reset(new WCHAR[size]);
   ::GetLongPathNameW(path, result->get(), size);
-  return L"";
+  return true;
 }
 
 HANDLE OpenDirectory(const WCHAR* path, bool read_write) {
@@ -88,8 +86,8 @@ typedef struct _JunctionDescription {
 } JunctionDescription;
 #pragma pack(pop)
 
-wstring CreateJunction(const wstring& junction_name,
-                       const wstring& junction_target) {
+string CreateJunction(const wstring& junction_name,
+                      const wstring& junction_target) {
   const wstring target = HasUncPrefix(junction_target.c_str())
                              ? junction_target.substr(4)
                              : junction_target;
@@ -115,8 +113,10 @@ wstring CreateJunction(const wstring& junction_name,
        /* two copies of the string are stored */ 2) /
       sizeof(WCHAR);
   if (target.size() > kMaxJunctionTargetLen) {
-    return MakeErrorMessage(WSTR(__FILE__), __LINE__, L"CreateJunction", target,
-                            L"target is too long");
+    std::stringstream error;
+    error << "junction target is too long (" << target.size()
+          << " characters, limit: " << kMaxJunctionTargetLen << ")";
+    return error.str();
   }
   const wstring name = HasUncPrefix(junction_name.c_str())
                            ? junction_name
@@ -124,19 +124,15 @@ wstring CreateJunction(const wstring& junction_name,
 
   // Junctions are directories, so create one
   if (!::CreateDirectoryW(name.c_str(), NULL)) {
-    DWORD err_code = GetLastError();
-    return MakeErrorMessage(WSTR(__FILE__), __LINE__, L"CreateJunction", name,
-                            err_code);
+    return string("CreateDirectoryW failed");
   }
 
   AutoHandle handle(OpenDirectory(name.c_str(), true));
   if (!handle.IsValid()) {
-    DWORD err_code = GetLastError();
-    return MakeErrorMessage(WSTR(__FILE__), __LINE__, L"OpenDirectory", name,
-                            err_code);
+    return string("OpenDirectory failed");
   }
 
-  uint8_t reparse_buffer_bytes[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
+  char reparse_buffer_bytes[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
   JunctionDescription* reparse_buffer =
       reinterpret_cast<JunctionDescription*>(reparse_buffer_bytes);
   memset(reparse_buffer_bytes, 0, MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
@@ -181,11 +177,9 @@ wstring CreateJunction(const wstring& junction_name,
                          reparse_buffer->header.ReparseDataLength +
                              sizeof(JunctionDescription::Header),
                          NULL, 0, &bytes_returned, NULL)) {
-    DWORD err_code = GetLastError();
-    return MakeErrorMessage(WSTR(__FILE__), __LINE__, L"DeviceIoControl", L"",
-                            err_code);
+    return string("DeviceIoControl(FSCTL_SET_REPARSE_POINT) failed");
   }
-  return L"";
+  return "";
 }
 
 }  // namespace windows

@@ -16,13 +16,13 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.MoreObjects.ToStringHelper;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -42,9 +42,9 @@ public class ActionLookupValue implements SkyValue {
   private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
   private static Actions.GeneratingActions filterSharedActionsAndThrowRuntimeIfConflict(
-      ActionKeyContext actionKeyContext, List<ActionAnalysisMetadata> actions) {
+      List<ActionAnalysisMetadata> actions) {
     try {
-      return Actions.filterSharedActionsAndThrowActionConflict(actionKeyContext, actions);
+      return Actions.filterSharedActionsAndThrowActionConflict(actions);
     } catch (ActionConflictException e) {
       // Programming bug.
       throw new IllegalStateException(e);
@@ -53,19 +53,12 @@ public class ActionLookupValue implements SkyValue {
 
   @VisibleForTesting
   public ActionLookupValue(
-      ActionKeyContext actionKeyContext,
-      List<ActionAnalysisMetadata> actions,
-      boolean removeActionsAfterEvaluation) {
-    this(
-        filterSharedActionsAndThrowRuntimeIfConflict(actionKeyContext, actions),
-        removeActionsAfterEvaluation);
+      List<ActionAnalysisMetadata> actions, boolean removeActionsAfterEvaluation) {
+    this(filterSharedActionsAndThrowRuntimeIfConflict(actions), removeActionsAfterEvaluation);
   }
 
-  protected ActionLookupValue(
-      ActionKeyContext actionKeyContext,
-      ActionAnalysisMetadata action,
-      boolean removeActionAfterEvaluation) {
-    this(actionKeyContext, ImmutableList.of(action), removeActionAfterEvaluation);
+  protected ActionLookupValue(ActionAnalysisMetadata action, boolean removeActionAfterEvaluation) {
+    this(ImmutableList.of(action), removeActionAfterEvaluation);
   }
 
   protected ActionLookupValue(

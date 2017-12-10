@@ -25,9 +25,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -47,7 +45,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -68,7 +65,6 @@ import javax.annotation.Nullable;
 @ThreadCompatible
 public final class CppLinkAction extends AbstractAction
     implements ExecutionInfoSpecifier, CommandAction {
-
   /**
    * An abstraction for creating intermediate and output artifacts for C++ linking.
    *
@@ -117,10 +113,8 @@ public final class CppLinkAction extends AbstractAction
   private final boolean fake;
   private final boolean isLtoIndexing;
 
-  private final PathFragment ldExecutable;
-  private final String hostSystemName;
-  private final String targetCpu;
-
+  // This is set for both LTO indexing and LTO linking.
+  @Nullable private final Iterable<LtoBackendArtifacts> allLtoBackendArtifacts;
   private final Iterable<Artifact> mandatoryInputs;
 
   // Linking uses a lot of memory; estimate 1 MB per input file, min 1.5 Gib.
@@ -158,12 +152,12 @@ public final class CppLinkAction extends AbstractAction
       LibraryToLink interfaceOutputLibrary,
       boolean fake,
       boolean isLtoIndexing,
+      Iterable<LtoBackendArtifacts> allLtoBackendArtifacts,
       LinkCommandLine linkCommandLine,
       ImmutableSet<String> clientEnvironmentVariables,
       ImmutableMap<String, String> actionEnv,
       ImmutableMap<String, String> toolchainEnv,
-      ImmutableSet<String> executionRequirements,
-      CcToolchainProvider toolchain) {
+      ImmutableSet<String> executionRequirements) {
     super(owner, inputs, outputs);
     if (mnemonic == null) {
       this.mnemonic = (isLtoIndexing) ? "CppLTOIndexing" : "CppLink";
@@ -177,14 +171,12 @@ public final class CppLinkAction extends AbstractAction
     this.interfaceOutputLibrary = interfaceOutputLibrary;
     this.fake = fake;
     this.isLtoIndexing = isLtoIndexing;
+    this.allLtoBackendArtifacts = allLtoBackendArtifacts;
     this.linkCommandLine = linkCommandLine;
     this.clientEnvironmentVariables = clientEnvironmentVariables;
     this.actionEnv = actionEnv;
     this.toolchainEnv = toolchainEnv;
     this.executionRequirements = executionRequirements;
-    this.ldExecutable = toolchain.getToolPathFragment(Tool.LD);
-    this.hostSystemName = toolchain.getHostSystemName();
-    this.targetCpu = toolchain.getTargetCpu();
   }
 
   private CppConfiguration getCppConfiguration() {
@@ -193,11 +185,11 @@ public final class CppLinkAction extends AbstractAction
 
   @VisibleForTesting
   public String getTargetCpu() {
-    return targetCpu;
+    return getCppConfiguration().getTargetCpu();
   }
 
   public String getHostSystemName() {
-    return hostSystemName;
+    return getCppConfiguration().getHostSystemName();
   }
 
   @Override
@@ -287,24 +279,16 @@ public final class CppLinkAction extends AbstractAction
     return linkCommandLine.getCommandLine();
   }
 
-  /**
-   * Returns a (possibly empty) mapping of (C++ source file, .o output file) pairs for source files
-   * that need to be compiled at link time.
-   *
-   * <p>This is used to embed various values from the build system into binaries to identify their
-   * provenance.
-   */
-  public ImmutableMap<Artifact, Artifact> getLinkstamps() {
-    return linkCommandLine.getLinkstamps();
+  Iterable<LtoBackendArtifacts> getAllLtoBackendArtifacts() {
+    return allLtoBackendArtifacts;
   }
 
   @Override
   @ThreadCompatible
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     if (fake) {
       executeFake();
-      return ActionResult.EMPTY;
     } else {
       try {
         Spawn spawn = new SimpleSpawn(
@@ -315,10 +299,8 @@ public final class CppLinkAction extends AbstractAction
             ImmutableList.copyOf(getMandatoryInputs()),
             getOutputs().asList(),
             estimateResourceConsumptionLocal());
-        return ActionResult.create(
-            actionExecutionContext
-                .getSpawnActionContext(getMnemonic())
-                .exec(spawn, actionExecutionContext));
+        actionExecutionContext.getSpawnActionContext(getMnemonic())
+            .exec(spawn, actionExecutionContext);
       } catch (ExecException e) {
         throw e.toActionExecutionException(
             "Linking of rule '" + getOwner().getLabel() + "'",
@@ -334,12 +316,12 @@ public final class CppLinkAction extends AbstractAction
       throws ActionExecutionException {
     // The uses of getLinkConfiguration in this method may not be consistent with the computed key.
     // I.e., this may be incrementally incorrect.
-    final Collection<Artifact> linkstampOutputs = getLinkstamps().values();
+    final Collection<Artifact> linkstampOutputs = getLinkCommandLine().getLinkstamps().values();
 
     // Prefix all fake output files in the command line with $TEST_TMPDIR/.
     final String outputPrefix = "$TEST_TMPDIR/";
-    List<String> escapedLinkArgv =
-        escapeLinkArgv(linkCommandLine.getRawLinkArgv(), linkstampOutputs, outputPrefix);
+    List<String> escapedLinkArgv = escapeLinkArgv(linkCommandLine.getRawLinkArgv(),
+        linkstampOutputs, outputPrefix);
     // Write the commands needed to build the real target to the fake target
     // file.
     StringBuilder s = new StringBuilder();
@@ -366,15 +348,12 @@ public final class CppLinkAction extends AbstractAction
 
       s.append(getOutputFile().getBaseName()).append(": ");
       for (Artifact linkstamp : linkstampOutputs) {
-        s.append(
-            "mkdir -p " + outputPrefix + linkstamp.getExecPath().getParentDirectory() + " && ");
+        s.append("mkdir -p " + outputPrefix +
+            linkstamp.getExecPath().getParentDirectory() + " && ");
       }
-      Joiner.on(' ')
-          .appendTo(
-              s,
-              ShellEscaper.escapeAll(
-                  linkCommandLine.finalizeAlreadyEscapedWithLinkstampCommands(
-                      escapedLinkArgv, outputPrefix)));
+      Joiner.on(' ').appendTo(s,
+          ShellEscaper.escapeAll(linkCommandLine.finalizeAlreadyEscapedWithLinkstampCommands(
+              escapedLinkArgv, outputPrefix)));
       s.append('\n');
       if (getOutputFile().exists()) {
         getOutputFile().setWritable(true); // (IOException)
@@ -385,8 +364,8 @@ public final class CppLinkAction extends AbstractAction
         FileSystemUtils.touchFile(linkstamp.getPath());
       }
     } catch (IOException e) {
-      throw new ActionExecutionException("failed to create fake link command for rule '"
-                                         + getOwner().getLabel() + ": " + e.getMessage(),
+      throw new ActionExecutionException("failed to create fake link command for rule '" +
+                                         getOwner().getLabel() + ": " + e.getMessage(),
                                          this, false);
     }
   }
@@ -399,10 +378,8 @@ public final class CppLinkAction extends AbstractAction
    * @param outputPrefix to be prepended to any outputs
    * @return escaped link command line
    */
-  private List<String> escapeLinkArgv(
-      List<String> rawLinkArgv,
-      final Collection<Artifact> linkstampOutputs,
-      final String outputPrefix) {
+  private List<String> escapeLinkArgv(List<String> rawLinkArgv,
+      final Collection<Artifact> linkstampOutputs, final String outputPrefix) {
     final List<String> linkstampExecPaths = Artifact.asExecPaths(linkstampOutputs);
     ImmutableList.Builder<String> escapedArgs = ImmutableList.builder();
     for (String rawArg : rawLinkArgv) {
@@ -411,9 +388,8 @@ public final class CppLinkAction extends AbstractAction
           || linkstampExecPaths.contains(rawArg)) {
         escapedArg = outputPrefix + ShellEscaper.escapeString(rawArg);
       } else if (rawArg.startsWith(Link.FAKE_OBJECT_PREFIX)) {
-        escapedArg =
-            outputPrefix
-                + ShellEscaper.escapeString(rawArg.substring(Link.FAKE_OBJECT_PREFIX.length()));
+        escapedArg = outputPrefix + ShellEscaper.escapeString(
+            rawArg.substring(Link.FAKE_OBJECT_PREFIX.length()));
       } else {
         escapedArg = ShellEscaper.escapeString(rawArg);
       }
@@ -423,7 +399,7 @@ public final class CppLinkAction extends AbstractAction
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext) {
+  public ExtraActionInfo.Builder getExtraActionInfo() {
     // The uses of getLinkConfiguration in this method may not be consistent with the computed key.
     // I.e., this may be incrementally incorrect.
     CppLinkInfo.Builder info = CppLinkInfo.newBuilder();
@@ -437,28 +413,23 @@ public final class CppLinkAction extends AbstractAction
     }
     info.setLinkTargetType(getLinkCommandLine().getLinkTargetType().name());
     info.setLinkStaticness(getLinkCommandLine().getLinkStaticness().name());
-    info.addAllLinkStamp(Artifact.toExecPaths(getLinkstamps().values()));
-    info.addAllBuildInfoHeaderArtifact(Artifact.toExecPaths(getBuildInfoHeaderArtifacts()));
+    info.addAllLinkStamp(Artifact.toExecPaths(getLinkCommandLine().getLinkstamps().values()));
+    info.addAllBuildInfoHeaderArtifact(
+        Artifact.toExecPaths(getLinkCommandLine().getBuildInfoHeaderArtifacts()));
     info.addAllLinkOpt(getLinkCommandLine().getRawLinkArgv());
 
     try {
-      return super.getExtraActionInfo(actionKeyContext)
-          .setExtension(CppLinkInfo.cppLinkInfo, info.build());
+      return super.getExtraActionInfo().setExtension(CppLinkInfo.cppLinkInfo, info.build());
     } catch (CommandLineExpansionException e) {
       throw new AssertionError("CppLinkAction command line expansion cannot fail.");
     }
   }
 
-  /** Returns the (ordered, immutable) list of header files that contain build info. */
-  public Iterable<Artifact> getBuildInfoHeaderArtifacts() {
-    return linkCommandLine.getBuildInfoHeaderArtifacts();
-  }
-
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(fake ? FAKE_LINK_GUID : LINK_GUID);
-    f.addString(ldExecutable.getPathString());
+    f.addString(getCppConfiguration().getLdExecutable().getPathString());
     f.addStrings(linkCommandLine.arguments());
     f.addStrings(getExecutionInfo().keySet());
 
@@ -488,8 +459,7 @@ public final class CppLinkAction extends AbstractAction
     message.append('\n');
     message.append("  Command: ");
     message.append(
-        ShellEscaper.escapeString(
-            getCppConfiguration().getToolPathFragment(Tool.LD).getPathString()));
+        ShellEscaper.escapeString(getCppConfiguration().getLdExecutable().getPathString()));
     message.append('\n');
     // Outputting one argument per line makes it easier to diff the results.
     for (String argument : ShellEscaper.escapeAll(linkCommandLine.arguments())) {
@@ -538,14 +508,13 @@ public final class CppLinkAction extends AbstractAction
     return mandatoryInputs;
   }
 
-  /** Determines whether or not this link should output a symbol counts file. */
+  /**
+   * Determines whether or not this link should output a symbol counts file.
+   */
   public static boolean enableSymbolsCounts(
-      CppConfiguration cppConfiguration,
-      boolean supportsGoldLinker,
-      boolean fake,
-      LinkTargetType linkType) {
+      CppConfiguration cppConfiguration, boolean fake, LinkTargetType linkType) {
     return cppConfiguration.getSymbolCounts()
-        && supportsGoldLinker
+        && cppConfiguration.supportsGoldLinker()
         && linkType == LinkTargetType.EXECUTABLE
         && !fake;
   }
@@ -596,10 +565,8 @@ public final class CppLinkAction extends AbstractAction
       this.runtimeInputs =
           NestedSetBuilder.<Artifact>stableOrder().addTransitive(builder.getRuntimeInputs()).build();
       this.runtimeType = builder.getRuntimeType();
-      this.compilationInputs =
-          NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(builder.getCompilationInputs().build())
-              .build();
+      this.compilationInputs = NestedSetBuilder.<Artifact>stableOrder()
+          .addTransitive(builder.getCompilationInputs().build()).build();
       this.linkstamps = ImmutableSet.copyOf(builder.getLinkstamps());
       this.linkopts = ImmutableList.copyOf(builder.getLinkopts());
       this.linkType = builder.getLinkType();
@@ -643,13 +610,17 @@ public final class CppLinkAction extends AbstractAction
     public NestedSet<Artifact> getRuntimeInputs() {
       return this.runtimeInputs;
     }
-
-    /** Returns compilation inputs for compilations arising from the linking of this target. */
+    
+    /**
+     * Returns compilation inputs for compilations arising from the linking of this target.
+     */
     public NestedSet<Artifact> getCompilationInputs() {
       return this.compilationInputs;
     }
 
-    /** Returns linkstamp artifacts. */
+    /**
+     * Returns linkstamp artifacts.
+     */
     public ImmutableSet<Artifact> getLinkstamps() {
       return this.linkstamps;
     }
@@ -683,7 +654,7 @@ public final class CppLinkAction extends AbstractAction
     }
     
     /**
-     * Returns true if the linking of this target is used for a native dependency library.
+     * Returns true if the linking of this target is used for a native dependecy library.
      */
     public boolean isNativeDeps() {
       return this.isNativeDeps;

@@ -14,16 +14,15 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.analysis.MakeVariableExpander.ExpansionException;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier.MapBackedMakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier.PackageBackedMakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
-import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -32,7 +31,7 @@ import java.util.Map;
  * target (not on behavior of the {@link ConfiguredTarget} implementation). Retrieved Make variable
  * value can be modified using {@link MakeVariableSupplier}
  */
-public class ConfigurationMakeVariableContext implements TemplateContext {
+public class ConfigurationMakeVariableContext implements MakeVariableExpander.Context {
 
   private final ImmutableList<? extends MakeVariableSupplier> allMakeVariableSuppliers;
 
@@ -86,14 +85,14 @@ public class ConfigurationMakeVariableContext implements TemplateContext {
   }
 
   @Override
-  public String lookupVariable(String name) throws ExpansionException {
+  public String lookupMakeVariable(String variableName) throws ExpansionException {
     for (MakeVariableSupplier supplier : allMakeVariableSuppliers) {
-      String variableValue = supplier.getMakeVariable(name);
+      String variableValue = supplier.getMakeVariable(variableName);
       if (variableValue != null) {
         return variableValue;
       }
     }
-    throw new ExpansionException(String.format("$(%s) not defined", name));
+    throw new MakeVariableExpander.ExpansionException("$(" + variableName + ") not defined");
   }
 
   public SkylarkDict<String, String> collectMakeVariables() {
@@ -104,10 +103,5 @@ public class ConfigurationMakeVariableContext implements TemplateContext {
       map.putAll(supplier.getAllMakeVariables());
     }
     return SkylarkDict.<String, String>copyOf(null, map);
-  }
-
-  @Override
-  public String lookupFunction(String name, String param) throws ExpansionException {
-    throw new ExpansionException(String.format("$(%s) not defined", name));
   }
 }

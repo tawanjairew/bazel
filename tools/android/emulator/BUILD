@@ -11,6 +11,5 @@ filegroup(
         "BUILD.tools",
         "googletest.sh",
         "no_se_linux.properties",
-        "snapshots.img.zip",
     ],
 )

@@ -13,9 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
+import static com.google.devtools.build.lib.util.Preconditions.checkArgument;
+import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.util.Preconditions.checkState;
 import static java.lang.String.format;
 import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -32,13 +32,11 @@ import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.remoteexecution.v1test.Digest;
 import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
-import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -69,7 +67,7 @@ final class ByteStreamUploader {
   private final Channel channel;
   private final CallCredentials callCredentials;
   private final long callTimeoutSecs;
-  private final RemoteRetrier retrier;
+  private final Retrier retrier;
   private final ListeningScheduledExecutorService retryService;
 
   private final Object lock = new Object();
@@ -90,7 +88,7 @@ final class ByteStreamUploader {
    *     case no authentication is performed
    * @param callTimeoutSecs the timeout in seconds after which a {@code Write} gRPC call must be
    *     complete. The timeout resets between retries
-   * @param retrier the {@link RemoteRetrier} whose backoff strategy to use for retry timings.
+   * @param retrier the {@link Retrier} whose backoff strategy to use for retry timings.
    * @param retryService the executor service to schedule retries on. It's the responsibility of the
    *     caller to properly shutdown the service after use. Users should avoid shutting down the
    *     service before {@link #shutdown()} has been called
@@ -100,7 +98,7 @@ final class ByteStreamUploader {
       Channel channel,
       @Nullable CallCredentials callCredentials,
       long callTimeoutSecs,
-      RemoteRetrier retrier,
+      Retrier retrier,
       ListeningScheduledExecutorService retryService) {
     checkArgument(callTimeoutSecs > 0, "callTimeoutSecs must be gt 0.");
 
@@ -113,11 +111,12 @@ final class ByteStreamUploader {
   }
 
   /**
-   * Uploads a BLOB, as provided by the {@link Chunker}, to the remote {@code ByteStream} service.
-   * The call blocks until the upload is complete, or throws an {@link Exception} in case of error.
+   * Uploads a BLOB, as provided by the {@link Chunker}, to the remote {@code
+   * ByteStream} service. The call blocks until the upload is complete, or throws an {@link
+   * Exception} in case of error.
    *
-   * <p>Uploads are retried according to the specified {@link RemoteRetrier}. Retrying is
-   * transparent to the user of this API.
+   * <p>Uploads are retried according to the specified {@link Retrier}. Retrying is transparent to
+   * the user of this API.
    *
    * <p>Trying to upload the same BLOB multiple times concurrently, results in only one upload being
    * performed. This is transparent to the user of this API.
@@ -125,7 +124,8 @@ final class ByteStreamUploader {
    * @throws IOException when reading of the {@link Chunker}s input source fails
    * @throws RetryException when the upload failed after a retry
    */
-  public void uploadBlob(Chunker chunker) throws IOException, InterruptedException {
+  public void uploadBlob(Chunker chunker)
+      throws IOException, InterruptedException {
     uploadBlobs(singletonList(chunker));
   }
 
@@ -135,8 +135,8 @@ final class ByteStreamUploader {
    * upload failed. Any other uploads will continue uploading in the background, until they complete
    * or the {@link #shutdown()} method is called. Errors encountered by these uploads are swallowed.
    *
-   * <p>Uploads are retried according to the specified {@link RemoteRetrier}. Retrying is
-   * transparent to the user of this API.
+   * <p>Uploads are retried according to the specified {@link Retrier}. Retrying is transparent to
+   * the user of this API.
    *
    * <p>Trying to upload the same BLOB multiple times concurrently, results in only one upload being
    * performed. This is transparent to the user of this API.
@@ -144,7 +144,8 @@ final class ByteStreamUploader {
    * @throws IOException when reading of the {@link Chunker}s input source fails
    * @throws RetryException when the upload failed after a retry
    */
-  public void uploadBlobs(Iterable<Chunker> chunkers) throws IOException, InterruptedException {
+  public void uploadBlobs(Iterable<Chunker> chunkers)
+      throws IOException, InterruptedException {
     List<ListenableFuture<Void>> uploads = new ArrayList<>();
 
     for (Chunker chunker : chunkers) {
@@ -224,7 +225,9 @@ final class ByteStreamUploader {
   }
 
   private void startAsyncUploadWithRetry(
-      Chunker chunker, Retrier.Backoff backoffTimes, SettableFuture<Void> overallUploadResult) {
+      Chunker chunker,
+      Retrier.Backoff backoffTimes,
+      SettableFuture<Void> overallUploadResult) {
 
     AsyncUpload.Listener listener =
         new AsyncUpload.Listener() {
@@ -237,13 +240,9 @@ final class ByteStreamUploader {
           public void failure(Status status) {
             StatusException cause = status.asException();
             long nextDelayMillis = backoffTimes.nextDelayMillis();
-            if (nextDelayMillis < 0 || !retrier.isRetriable(cause)) {
+            if (nextDelayMillis < 0 || !retrier.isRetriable(status)) {
               // Out of retries or status not retriable.
-              RetryException error =
-                  new RetryException(
-                      "Out of retries or status not retriable.",
-                      backoffTimes.getRetryAttempts(),
-                      cause);
+              RetryException error = new RetryException(cause, backoffTimes.getRetryAttempts());
               overallUploadResult.setException(error);
             } else {
               retryAsyncUpload(nextDelayMillis, chunker, backoffTimes, overallUploadResult);
@@ -258,11 +257,9 @@ final class ByteStreamUploader {
             try {
               ListenableScheduledFuture<?> schedulingResult =
                   retryService.schedule(
-                      Context.current()
-                          .wrap(
-                              () ->
-                                  startAsyncUploadWithRetry(
-                                      chunker, backoffTimes, overallUploadResult)),
+                      () ->
+                          startAsyncUploadWithRetry(
+                              chunker, backoffTimes, overallUploadResult),
                       nextDelayMillis,
                       MILLISECONDS);
               // In case the scheduled execution errors, we need to notify the overallUploadResult.
@@ -272,15 +269,14 @@ final class ByteStreamUploader {
                       schedulingResult.get();
                     } catch (Exception e) {
                       overallUploadResult.setException(
-                          new RetryException(
-                              "Scheduled execution errored.", backoffTimes.getRetryAttempts(), e));
+                          new RetryException(e, backoffTimes.getRetryAttempts()));
                     }
                   },
                   MoreExecutors.directExecutor());
             } catch (RejectedExecutionException e) {
               // May be thrown by .schedule(...) if i.e. the executor is shutdown.
               overallUploadResult.setException(
-                  new RetryException("Rejected by executor.", backoffTimes.getRetryAttempts(), e));
+                  new RetryException(e, backoffTimes.getRetryAttempts()));
             }
           }
         };
@@ -422,7 +418,7 @@ final class ByteStreamUploader {
               return resourceName;
             }
           };
-      call.start(callListener, TracingMetadataUtils.headersFromCurrentContext());
+      call.start(callListener, new Metadata());
       call.request(1);
     }
 

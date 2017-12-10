@@ -15,18 +15,18 @@ filegroup(
 filegroup(
     name = "packages",
     srcs = select({
-        "//src/conditions:windows": [
+        "//src:windows": [
             ":zip-bazel-exe",
             ":zip-bazel-exe_with_jdk",
         ],
-        "//src/conditions:windows_msvc": [],
-        "//src/conditions:freebsd": [],
-        "//src/conditions:darwin": [
+        "//src:windows_msvc": [],
+        "//src:freebsd": [],
+        "//src:darwin": [
             ":with-jdk/install.sh",
             ":without-jdk/install.sh",
             ":generate-package-info",
         ],
-        "//src/conditions:darwin_x86_64": [
+        "//src:darwin_x86_64": [
             ":with-jdk/install.sh",
             ":without-jdk/install.sh",
             ":generate-package-info",

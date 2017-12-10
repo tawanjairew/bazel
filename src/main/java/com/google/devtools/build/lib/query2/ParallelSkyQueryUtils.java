@@ -23,6 +23,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
@@ -83,28 +84,28 @@ class ParallelSkyQueryUtils {
   static void getRBuildFilesParallel(
       SkyQueryEnvironment env,
       Collection<PathFragment> fileIdentifiers,
-      Callback<Target> callback) throws QueryException, InterruptedException {
+      Callback<Target> callback,
+      MultisetSemaphore<PackageIdentifier> packageSemaphore)
+          throws QueryException, InterruptedException {
     Uniquifier<SkyKey> keyUniquifier = env.createSkyKeyUniquifier();
     RBuildFilesVisitor visitor =
-        new RBuildFilesVisitor(env, keyUniquifier, callback);
-    visitor.visitAndWaitForCompletion(env.getFileStateKeysForFileFragments(fileIdentifiers));
+        new RBuildFilesVisitor(env, keyUniquifier, callback, packageSemaphore);
+    visitor.visitAndWaitForCompletion(env.getSkyKeysForFileFragments(fileIdentifiers));
   }
 
   /** A helper class that computes 'rbuildfiles(<blah>)' via BFS. */
   private static class RBuildFilesVisitor extends ParallelVisitor<SkyKey, Target> {
-    // Each target in the full output of 'rbuildfiles' corresponds to BUILD file InputFile of a
-    // unique package. So the processResultsBatchSize we choose to pass to the ParallelVisitor ctor
-    // influences how many packages each leaf task doing processPartialResults will have to
-    // deal with at once. A value of 100 was chosen experimentally.
-    private static final int PROCESS_RESULTS_BATCH_SIZE = 100;
     private final SkyQueryEnvironment env;
+    private final MultisetSemaphore<PackageIdentifier> packageSemaphore;
 
     private RBuildFilesVisitor(
         SkyQueryEnvironment env,
         Uniquifier<SkyKey> uniquifier,
-        Callback<Target> callback) {
-      super(uniquifier, callback, VISIT_BATCH_SIZE, PROCESS_RESULTS_BATCH_SIZE);
+        Callback<Target> callback,
+        MultisetSemaphore<PackageIdentifier> packageSemaphore) {
+      super(uniquifier, callback, VISIT_BATCH_SIZE);
       this.env = env;
+      this.packageSemaphore = packageSemaphore;
     }
 
     @Override
@@ -119,11 +120,9 @@ class ParallelSkyQueryUtils {
           if (rdep.equals(PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER))) {
             keysToVisitNext.add(rdep);
           }
-        } else if (!rdep.functionName().equals(SkyFunctions.PACKAGE_LOOKUP)
-            && !rdep.functionName().equals(SkyFunctions.GLOB)) {
+        } else if (!rdep.functionName().equals(SkyFunctions.PACKAGE_LOOKUP)) {
           // Packages may depend on the existence of subpackages, but these edges aren't relevant to
-          // rbuildfiles. They may also depend on files transitively through globs, but these cannot
-          // be included in load statements and so we don't traverse through these either.
+          // rbuildfiles.
           keysToVisitNext.add(rdep);
         }
       }
@@ -134,7 +133,17 @@ class ParallelSkyQueryUtils {
     protected void processPartialResults(
         Iterable<SkyKey> keysToUseForResult, Callback<Target> callback)
         throws QueryException, InterruptedException {
-      env.getBuildFileTargetsForPackageKeysAndProcessViaCallback(keysToUseForResult, callback);
+      Set<PackageIdentifier> pkgIdsNeededForResult =
+          Streams.stream(keysToUseForResult)
+              .map(SkyQueryEnvironment.PACKAGE_SKYKEY_TO_PACKAGE_IDENTIFIER)
+              .collect(toImmutableSet());
+      packageSemaphore.acquireAll(pkgIdsNeededForResult);
+      try {
+        callback.process(SkyQueryEnvironment.getBuildFilesForPackageValues(
+            env.graph.getSuccessfulValues(keysToUseForResult).values()));
+      } finally {
+        packageSemaphore.releaseAll(pkgIdsNeededForResult);
+      }
     }
 
     @Override
@@ -157,7 +166,6 @@ class ParallelSkyQueryUtils {
    */
   private static class AllRdepsUnboundedVisitor
       extends ParallelVisitor<Pair<SkyKey, SkyKey>, Target> {
-    private static final int PROCESS_RESULTS_BATCH_SIZE = SkyQueryEnvironment.BATCH_CALLBACK_SIZE;
     private final SkyQueryEnvironment env;
     private final MultisetSemaphore<PackageIdentifier> packageSemaphore;
 
@@ -166,7 +174,7 @@ class ParallelSkyQueryUtils {
         Uniquifier<Pair<SkyKey, SkyKey>> uniquifier,
         Callback<Target> callback,
         MultisetSemaphore<PackageIdentifier> packageSemaphore) {
-      super(uniquifier, callback, VISIT_BATCH_SIZE, PROCESS_RESULTS_BATCH_SIZE);
+      super(uniquifier, callback, VISIT_BATCH_SIZE);
       this.env = env;
       this.packageSemaphore = packageSemaphore;
     }

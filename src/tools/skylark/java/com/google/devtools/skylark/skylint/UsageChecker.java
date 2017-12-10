@@ -19,9 +19,7 @@ import com.google.common.base.Equivalence.Wrapper;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.syntax.ASTNode;
-import com.google.devtools.build.lib.syntax.AssignmentStatement;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
-import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.ExpressionStatement;
 import com.google.devtools.build.lib.syntax.FlowStatement;
 import com.google.devtools.build.lib.syntax.ForStatement;
@@ -41,14 +39,10 @@ import java.util.Set;
 
 /** Checks that every import, private function or variable definition is used somewhere. */
 public class UsageChecker extends AstVisitorWithNameResolution {
-  private static final String UNUSED_BINDING_CATEGORY = "unused-binding";
-  private static final String UNINITIALIZED_VARIABLE_CATEGORY = "uninitialized-variable";
-
   private final List<Issue> issues = new ArrayList<>();
   private UsageInfo ui = UsageInfo.empty();
   private final SetMultimap<Integer, Wrapper<ASTNode>> idToAllDefinitions =
       LinkedHashMultimap.create();
-  private final Set<Wrapper<ASTNode>> initializationsWithNone = new LinkedHashSet<>();
 
   public static List<Issue> check(BuildFileAST ast) {
     UsageChecker checker = new UsageChecker();
@@ -112,38 +106,6 @@ public class UsageChecker extends AstVisitorWithNameResolution {
     }
   }
 
-  @Override
-  public void visit(AssignmentStatement node) {
-    super.visit(node);
-    /* If a variable is initialized with None, and there exist other assignments to the variable,
-     * then this initialization is itself considered as a usage. This is because it's good practice
-     * to place a "declaration" of a variable in a location that dominates all its uses, especially
-     * so if you want to document the variable. Example:
-     *
-     *     var = None  # don't warn about the unused binding
-     *     if condition:
-     *       var = 0
-     *     else:
-     *       var = 1
-     *
-     * Unfortunately, as a side-effect, the following won't trigger a warning either:
-     *
-     *     var = None  # doesn't warn either but ideally should
-     *     var = 0
-     */
-    Expression lhs = node.getLValue().getExpression();
-    Expression rhs = node.getExpression();
-    if (lhs instanceof Identifier
-        && rhs instanceof Identifier
-        && ((Identifier) rhs).getName().equals("None")) {
-      NameInfo info = env.resolveName(((Identifier) lhs).getName());
-      // if it's an initialization:
-      if (info != null && idToAllDefinitions.get(info.id).size() == 1) {
-        initializationsWithNone.add(wrapNode(lhs));
-      }
-    }
-  }
-
   private void defineIdentifier(NameInfo name, ASTNode node) {
     ui.idToLastDefinitions.removeAll(name.id);
     ui.idToLastDefinitions.put(name.id, wrapNode(node));
@@ -182,15 +144,14 @@ public class UsageChecker extends AstVisitorWithNameResolution {
   }
 
   private void checkUsed(Integer id) {
-    Set<Wrapper<ASTNode>> unusedDefinitions = new LinkedHashSet<>(idToAllDefinitions.get(id));
+    Set<Wrapper<ASTNode>> unusedDefinitions = idToAllDefinitions.get(id);
     unusedDefinitions.removeAll(ui.usedDefinitions);
     NameInfo nameInfo = env.getNameInfo(id);
     String name = nameInfo.name;
     if ("_".equals(name) || nameInfo.kind == Kind.BUILTIN) {
       return;
     }
-    if ((nameInfo.kind == Kind.LOCAL || nameInfo.kind == Kind.PARAMETER)
-        && (name.startsWith("_") || name.startsWith("unused_") || name.startsWith("UNUSED_"))) {
+    if ((nameInfo.kind == Kind.LOCAL || nameInfo.kind == Kind.PARAMETER) && name.startsWith("_")) {
       // local variables starting with an underscore need not be used
       return;
     }
@@ -198,23 +159,8 @@ public class UsageChecker extends AstVisitorWithNameResolution {
       // symbol might be loaded in another file
       return;
     }
-    String message = "unused binding of '" + name + "'";
-    if (nameInfo.kind == Kind.IMPORTED && !nameInfo.name.startsWith("_")) {
-      message +=
-          ". If you want to re-export a symbol, use the following pattern:\n"
-              + "\n"
-              + "load(..., _"
-              + name
-              + " = '"
-              + name
-              + "', ...)\n"
-              + name
-              + " = _"
-              + name
-              + "\n"
-              + "\n"
-              + "More details in the documentation.";
-    } else if (nameInfo.kind == Kind.PARAMETER) {
+    String message = "unused definition of '" + name + "'";
+    if (nameInfo.kind == Kind.PARAMETER) {
       message +=
           ". If this is intentional, "
               + "you can add `_ignore = [<param1>, <param2>, ...]` to the function body.";
@@ -222,28 +168,15 @@ public class UsageChecker extends AstVisitorWithNameResolution {
       message += ". If this is intentional, you can use '_' or rename it to '_" + name + "'.";
     }
     for (Wrapper<ASTNode> definition : unusedDefinitions) {
-      if (initializationsWithNone.contains(definition) && idToAllDefinitions.get(id).size() > 1) {
-        // initializations with None are OK, cf. visit(AssignmentStatement) above
-        continue;
-      }
-      issues.add(
-          Issue.create(UNUSED_BINDING_CATEGORY, message, unwrapNode(definition).getLocation()));
+      issues.add(new Issue(message, unwrapNode(definition).getLocation()));
     }
   }
 
   private void checkInitialized(NameInfo info, Identifier node) {
     if (ui.reachable && !ui.initializedIdentifiers.contains(info.id) && info.kind != Kind.BUILTIN) {
       issues.add(
-          Issue.create(
-              UNINITIALIZED_VARIABLE_CATEGORY,
-              "variable '"
-                  + info.name
-                  + "' may not have been initialized."
-                  + " If you believe this is wrong, you can add `fail('unreachable')"
-                  + " to the branches where it is not initialized"
-                  + " or initialize it with `None` at the beginning."
-                  + " For more details, have a look at the documentation.",
-              node.getLocation()));
+          new Issue(
+              "identifier '" + info.name + "' may not have been initialized", node.getLocation()));
     }
   }
 

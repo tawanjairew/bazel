@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.skylarkinterface;
 
+import com.google.devtools.build.lib.util.Pair;
 import java.lang.reflect.Method;
 import javax.annotation.Nullable;
 
@@ -22,30 +23,21 @@ import javax.annotation.Nullable;
  */
 public class SkylarkInterfaceUtils {
 
-  private static final class ClassAndSkylarkModule {
-    final Class<?> klass;
-    final SkylarkModule skylarkModule;
-
-    ClassAndSkylarkModule(Class<?> klass, SkylarkModule skylarkModule) {
-      this.klass = klass;
-      this.skylarkModule = skylarkModule;
-    }
-  }
-
   @Nullable
-  private static ClassAndSkylarkModule searchForSkylarkModule(Class<?> classObj) {
+  private static Pair<Class<?>, SkylarkModule> searchForSkylarkModule(Class<?> classObj) {
     if (classObj.isAnnotationPresent(SkylarkModule.class)) {
-      return new ClassAndSkylarkModule(classObj, classObj.getAnnotation(SkylarkModule.class));
+      return new Pair<Class<?>, SkylarkModule>(
+          classObj, classObj.getAnnotation(SkylarkModule.class));
     }
     Class<?> superclass = classObj.getSuperclass();
     if (superclass != null) {
-      ClassAndSkylarkModule result = searchForSkylarkModule(superclass);
+      Pair<Class<?>, SkylarkModule> result = searchForSkylarkModule(superclass);
       if (result != null) {
         return result;
       }
     }
     for (Class<?> interfaceObj : classObj.getInterfaces()) {
-      ClassAndSkylarkModule result = searchForSkylarkModule(interfaceObj);
+      Pair<Class<?>, SkylarkModule> result = searchForSkylarkModule(interfaceObj);
       if (result != null) {
         return result;
       }
@@ -60,8 +52,8 @@ public class SkylarkInterfaceUtils {
    */
   @Nullable
   public static SkylarkModule getSkylarkModule(Class<?> classObj) {
-    ClassAndSkylarkModule result = searchForSkylarkModule(classObj);
-    return result == null ? null : result.skylarkModule;
+    Pair<Class<?>, SkylarkModule> result = searchForSkylarkModule(classObj);
+    return result == null ? null : result.second;
   }
 
   /**
@@ -71,8 +63,8 @@ public class SkylarkInterfaceUtils {
    */
   @Nullable
   public static Class<?> getParentWithSkylarkModule(Class<?> classObj) {
-    ClassAndSkylarkModule result = searchForSkylarkModule(classObj);
-    return result == null ? null : result.klass;
+    Pair<Class<?>, SkylarkModule> result = searchForSkylarkModule(classObj);
+    return result == null ? null : result.first;
   }
 
   /**

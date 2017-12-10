@@ -49,10 +49,7 @@ public abstract class AbstractPackageLoaderTest {
     Reporter reporter = new Reporter(new EventBus());
     handler = new StoredEventHandler();
     reporter.addHandler(handler);
-    pkgLoader = makeFreshBuilder(pkgRoot)
-        .useDefaultSkylarkSemantics()
-        .setReporter(reporter)
-        .build();
+    pkgLoader = makeFreshBuilder(pkgRoot).setReporter(reporter).build();
   }
 
   protected abstract AbstractPackageLoader.Builder makeFreshBuilder(Path pkgRoot);
@@ -109,19 +106,6 @@ public abstract class AbstractPackageLoaderTest {
         .isEqualTo("sh_library");
     assertNoEvents(pkgs.get(pkgId1).get().getEvents());
     assertNoEvents(pkgs.get(pkgId2).get().getEvents());
-    assertNoEvents(handler.getEvents());
-  }
-
-  @Test
-  public void loadPackagesToleratesDuplicates() throws Exception {
-    file("good1/BUILD", "sh_library(name = 'good1')");
-    PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("good1"));
-    ImmutableMap<PackageIdentifier, PackageLoader.PackageOrException> pkgs =
-        pkgLoader.loadPackages(ImmutableList.of(pkgId, pkgId));
-    assertThat(pkgs.get(pkgId).get().containsErrors()).isFalse();
-    assertThat(pkgs.get(pkgId).get().getTarget("good1").getAssociatedRule().getRuleClass())
-        .isEqualTo("sh_library");
-    assertNoEvents(pkgs.get(pkgId).get().getEvents());
     assertNoEvents(handler.getEvents());
   }
 

@@ -47,7 +47,7 @@ import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
@@ -75,7 +75,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
   public static ConfiguredTarget buildRule(
       RuleContext ruleContext,
       BaseFunction ruleImplementation,
-      SkylarkSemantics skylarkSemantics)
+      SkylarkSemanticsOptions skylarkSemantics)
       throws InterruptedException {
     String expectFailure = ruleContext.attributes().get("expect_failure", Type.STRING);
     SkylarkRuleContext skylarkRuleContext = null;
@@ -84,14 +84,20 @@ public final class SkylarkRuleConfiguredTargetUtil {
       Environment env =
           Environment.builder(mutability)
               .setCallerLabel(ruleContext.getLabel())
+              .setGlobals(
+                  ruleContext
+                      .getRule()
+                      .getRuleClassObject()
+                      .getRuleDefinitionEnvironment()
+                      .getGlobals())
               .setSemantics(skylarkSemantics)
               .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
               .build(); // NB: loading phase functions are not available: this is analysis already,
       // so we do *not* setLoadingPhase().
       Object target =
           ruleImplementation.call(
-              /*args=*/ ImmutableList.of(skylarkRuleContext),
-              /*kwargs*/ ImmutableMap.of(),
+              ImmutableList.<Object>of(skylarkRuleContext),
+              ImmutableMap.<String, Object>of(),
               /*ast=*/ null,
               env);
 
@@ -108,14 +114,14 @@ public final class SkylarkRuleConfiguredTargetUtil {
         ruleContext.ruleError("Expected failure not found: " + expectFailure);
         return null;
       }
-      ConfiguredTarget configuredTarget = createTarget(skylarkRuleContext, target);
+      ConfiguredTarget configuredTarget = createTarget(ruleContext, target);
       SkylarkProviderValidationUtil.checkOrphanArtifacts(ruleContext);
       return configuredTarget;
     } catch (EvalException e) {
       addRuleToStackTrace(e, ruleContext.getRule(), ruleImplementation);
       // If the error was expected, return an empty target.
       if (!expectFailure.isEmpty() && getMessageWithoutStackTrace(e).matches(expectFailure)) {
-        return new RuleConfiguredTargetBuilder(ruleContext)
+        return new com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder(ruleContext)
             .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
             .build();
       }
@@ -151,19 +157,14 @@ public final class SkylarkRuleConfiguredTargetUtil {
     return ex.getMessage();
   }
 
-  private static ConfiguredTarget createTarget(SkylarkRuleContext context, Object target)
+  private static ConfiguredTarget createTarget(RuleContext ruleContext, Object target)
       throws EvalException {
-    RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(
-        context.getRuleContext());
+    RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
     // Set the default files to build.
 
     Location loc =
-        context.getRuleContext()
-            .getRule()
-            .getRuleClassObject()
-            .getConfiguredTargetFunction()
-            .getLocation();
-    addProviders(context, builder, target, loc);
+        ruleContext.getRule().getRuleClassObject().getConfiguredTargetFunction().getLocation();
+    addProviders(ruleContext, builder, target, loc);
 
     try {
       return builder.build();
@@ -265,7 +266,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
   }
 
   private static void addProviders(
-      SkylarkRuleContext context, RuleConfiguredTargetBuilder builder, Object target, Location loc)
+      RuleContext ruleContext, RuleConfiguredTargetBuilder builder, Object target, Location loc)
       throws EvalException {
 
     Info oldStyleProviders = NativeProvider.STRUCT.create(loc);
@@ -317,7 +318,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
           .getProvider()
           .getKey()
           .equals(DefaultInfo.PROVIDER.getKey())) {
-        parseDefaultProviderKeys(declaredProvider, context, builder);
+        parseDefaultProviderKeys(declaredProvider, ruleContext, builder);
         defaultProviderProvidedExplicitly = true;
       } else {
         Location creationLoc = declaredProvider.getCreationLocOrNull();
@@ -327,7 +328,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
     }
 
     if (!defaultProviderProvidedExplicitly) {
-      parseDefaultProviderKeys(oldStyleProviders, context, builder);
+      parseDefaultProviderKeys(oldStyleProviders, ruleContext, builder);
     }
 
     for (String key : oldStyleProviders.getKeys()) {
@@ -346,7 +347,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
         addOutputGroups(oldStyleProviders.getValue(key), loc, builder);
       } else if (key.equals("instrumented_files")) {
         Info insStruct = cast("instrumented_files", oldStyleProviders, Info.class, loc);
-        addInstrumentedFiles(insStruct, context.getRuleContext(), builder);
+        addInstrumentedFiles(insStruct, ruleContext, builder);
       } else if (isNativeDeclaredProviderWithLegacySkylarkName(oldStyleProviders.getValue(key))) {
         builder.addNativeDeclaredProvider((Info) oldStyleProviders.getValue(key));
       } else if (!key.equals("providers")) {
@@ -368,13 +369,18 @@ public final class SkylarkRuleConfiguredTargetUtil {
    * throws an {@link EvalException} if there are unknown keys.
    */
   private static void parseDefaultProviderKeys(
-      Info provider, SkylarkRuleContext context, RuleConfiguredTargetBuilder builder)
+      Info provider, RuleContext ruleContext, RuleConfiguredTargetBuilder builder)
       throws EvalException {
     SkylarkNestedSet files = null;
     Runfiles statelessRunfiles = null;
     Runfiles dataRunfiles = null;
     Runfiles defaultRunfiles = null;
-    Artifact executable = null;
+    Artifact executable =
+        ruleContext.getRule().getRuleClassObject().outputsDefaultExecutable()
+            // This doesn't actually create a new Artifact just returns the one
+            // created in SkylarkRuleContext.
+            ? ruleContext.createOutputArtifact()
+            : null;
 
     Location loc = provider.getCreationLoc();
 
@@ -397,37 +403,9 @@ public final class SkylarkRuleConfiguredTargetUtil {
         throw new EvalException(loc, "Invalid key for default provider: " + key);
       }
     }
-
-    if (executable != null && context.isExecutable() && context.isDefaultExecutableCreated()) {
-        Artifact defaultExecutable = context.getRuleContext().createOutputArtifact();
-        if (!executable.equals(defaultExecutable)) {
-          throw new EvalException(loc,
-              String.format(
-                  "The rule '%s' both accesses 'ctx.outputs.executable' and provides "
-                      + "a different executable '%s'. Do not use 'ctx.output.executable'.",
-                  context.getRuleContext().getRule().getRuleClass(),
-                  executable.getRootRelativePathString())
-          );
-        }
-    }
-
-    if (executable == null && context.isExecutable()) {
-      if (context.isDefaultExecutableCreated()) {
-        // This doesn't actually create a new Artifact just returns the one
-        // created in SkylarkRuleContext.
-        executable = context.getRuleContext().createOutputArtifact();
-      } else {
-        throw new EvalException(loc,
-            String.format("The rule '%s' is executable. "
-                    + "It needs to create an executable File and pass it as the 'executable' "
-                    + "parameter to the DefaultInfo it returns.",
-                context.getRuleContext().getRule().getRuleClass()));
-      }
-    }
-
     addSimpleProviders(
         builder,
-        context.getRuleContext(),
+        ruleContext,
         loc,
         executable,
         files,

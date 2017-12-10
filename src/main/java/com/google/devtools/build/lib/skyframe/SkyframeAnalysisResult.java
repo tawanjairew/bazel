@@ -14,9 +14,12 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.PackageRoots;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.WalkableGraph;
+
 import java.util.Collection;
 
 /**
@@ -28,15 +31,15 @@ public class SkyframeAnalysisResult {
   private final ImmutableList<ConfiguredTarget> configuredTargets;
   private final WalkableGraph walkableGraph;
   private final ImmutableList<AspectValue> aspects;
-  private final PackageRoots packageRoots;
+  private final ImmutableMap<PackageIdentifier, Path> packageRoots;
 
-  SkyframeAnalysisResult(
+  public SkyframeAnalysisResult(
       boolean hasLoadingError,
       boolean hasAnalysisError,
       ImmutableList<ConfiguredTarget> configuredTargets,
       WalkableGraph walkableGraph,
       ImmutableList<AspectValue> aspects,
-      PackageRoots packageRoots) {
+      ImmutableMap<PackageIdentifier, Path> packageRoots) {
     this.hasLoadingError = hasLoadingError;
     this.hasAnalysisError = hasAnalysisError;
     this.configuredTargets = configuredTargets;
@@ -70,7 +73,7 @@ public class SkyframeAnalysisResult {
     return aspects;
   }
 
-  public PackageRoots getPackageRoots() {
+  public ImmutableMap<PackageIdentifier, Path> getPackageRoots() {
     return packageRoots;
   }
 }

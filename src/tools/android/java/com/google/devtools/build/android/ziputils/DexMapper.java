@@ -45,12 +45,9 @@ public class DexMapper {
     String resourceFile = options.outputResources;
 
     try {
-      // Always drop desugaring metadata, which we check elsewhere and don't want in final APKs
-      // (see b/65645388).
-      Predicate<String> inputFilter = Predicates.not(Predicates.equalTo("META-INF/desugar_deps"));
+      Predicate<String> inputFilter = Predicates.alwaysTrue();
       if (options.inclusionFilterJar != null) {
-        inputFilter =
-            Predicates.and(inputFilter, SplitZipFilters.entriesIn(options.inclusionFilterJar));
+        inputFilter = SplitZipFilters.entriesIn(options.inclusionFilterJar);
       }
       new SplitZip()
           .setVerbose(false)

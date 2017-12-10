@@ -15,19 +15,18 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Objects;
-import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** The resources contributed by a single target. */
@@ -73,8 +72,7 @@ public abstract class ResourceContainer {
 
   abstract ImmutableList<Artifact> getAssets();
 
-  @VisibleForTesting
-  public abstract ImmutableList<Artifact> getResources();
+  abstract ImmutableList<Artifact> getResources();
 
   public ImmutableList<Artifact> getArtifacts(ResourceType resourceType) {
     return resourceType == ResourceType.ASSETS ? getAssets() : getResources();
@@ -84,43 +82,10 @@ public abstract class ResourceContainer {
     return Iterables.concat(getAssets(), getResources());
   }
 
-  /**
-   * Gets the directories containing the assets.
-   *
-   * TODO(b/30308041): Stop using these directories, and remove this code.
-   *
-   * @deprecated We are moving towards passing around the actual artifacts, rather than the
-   *     directories that contain them. If the resources were provided with a glob() that excludes
-   *     some files, the resource directory will still contain those files, resulting in unwanted
-   *     inputs.
-   */
-  @Deprecated
   abstract ImmutableList<PathFragment> getAssetsRoots();
 
-  /**
-   * Gets the directories containing the resources.
-   *
-   * TODO(b/30308041): Stop using these directories, and remove this code.
-   *
-   * @deprecated We are moving towards passing around the actual artifacts, rather than the
-   *     directories that contain them. If the resources were provided with a glob() that excludes
-   *     some files, the resource directory will still contain those files, resulting in unwanted
-   *     inputs.
-   */
-  @Deprecated
   abstract ImmutableList<PathFragment> getResourcesRoots();
 
-  /**
-   * Gets the directories containing the resources of a specific type.
-   *
-   * TODO(b/30308041): Stop using these directories, and remove this code.
-   *
-   * @deprecated We are moving towards passing around the actual artifacts, rather than the
-   *     directories that contain them. If the resources were provided with a glob() that excludes
-   *     some files, the resource directory will still contain those files, resulting in unwanted
-   *     inputs.
-   */
-  @Deprecated
   public ImmutableList<PathFragment> getRoots(ResourceType resourceType) {
     return resourceType == ResourceType.ASSETS ? getAssetsRoots() : getResourcesRoots();
   }
@@ -177,11 +142,10 @@ public abstract class ResourceContainer {
    * Returns a copy of this container with filtered resources, or the original if no resources
    * should be filtered. The original container is unchanged.
    */
-  public ResourceContainer filter(ResourceFilter filter, boolean isDependency) {
-    Optional<ImmutableList<Artifact>> filteredResources =
-        filter.maybeFilter(getResources(), isDependency);
+  public ResourceContainer filter(RuleErrorConsumer ruleErrorConsumer, ResourceFilter filter) {
+    ImmutableList<Artifact> filteredResources = filter.filter(ruleErrorConsumer, getResources());
 
-    if (!filteredResources.isPresent()) {
+    if (filteredResources.size() == getResources().size()) {
       // No filtering was done; return this container
       return this;
     }
@@ -189,7 +153,7 @@ public abstract class ResourceContainer {
     // If the resources were filtered, also filter the resource roots
     ImmutableList.Builder<PathFragment> filteredResourcesRootsBuilder = ImmutableList.builder();
     for (PathFragment resourceRoot : getResourcesRoots()) {
-      for (Artifact resource : filteredResources.get()) {
+      for (Artifact resource : filteredResources) {
         if (resource.getRootRelativePath().startsWith(resourceRoot)) {
           filteredResourcesRootsBuilder.add(resourceRoot);
           break;
@@ -198,7 +162,7 @@ public abstract class ResourceContainer {
     }
 
     return toBuilder()
-        .setResources(filteredResources.get())
+        .setResources(filteredResources)
         .setResourcesRoots(filteredResourcesRootsBuilder.build())
         .build();
   }

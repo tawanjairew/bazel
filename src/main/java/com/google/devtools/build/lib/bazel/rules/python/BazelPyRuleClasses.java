@@ -26,10 +26,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
+import com.google.devtools.build.lib.packages.AttributeMap;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
@@ -44,11 +46,13 @@ import com.google.devtools.build.lib.util.FileType;
 public final class BazelPyRuleClasses {
   public static final FileType PYTHON_SOURCE = FileType.of(".py");
 
-  public static final LateBoundDefault<?, Label> PY_INTERPRETER =
-      LateBoundDefault.fromTargetConfiguration(
-          BazelPythonConfiguration.class,
-          null,
-          (rule, attributes, bazelPythonConfig) -> bazelPythonConfig.getPythonTop());
+  public static final LateBoundLabel<BuildConfiguration> PY_INTERPRETER =
+      new LateBoundLabel<BuildConfiguration>() {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+          return configuration.getFragment(BazelPythonConfiguration.class).getPythonTop();
+        }
+      };
 
   /**
    * Base class for Python rule definitions.
@@ -64,7 +68,8 @@ public final class BazelPyRuleClasses {
           Attributes common to all build rules</a>.
           These can be
           <a href="${link py_binary}"><code>py_binary</code></a> rules,
-          <a href="${link py_library}"><code>py_library</code></a> rules.
+          <a href="${link py_library}"><code>py_library</code></a> rules or
+          <a href="${link cc_library}"><code>cc_library</code></a> rules,
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .override(builder.copy("deps")
               .legacyMandatoryProviders(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME)
@@ -99,15 +104,12 @@ public final class BazelPyRuleClasses {
           <code>"PY2AND3"</code> -
             Code that is compatible with both Python 2 and 3 without
             <code>2to3</code> conversion.<br/>
-          <code>"PY3ONLY"</code> -
-            Python 3 code that will not run on Python 2.<br/>
           <code>"PY3"</code> -
-            A synonym for PY3ONLY.<br/>
+            Python 3 code that will not run on Python 2.<br/>
           <br/>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("srcs_version", STRING)
-              .value(PythonVersion.defaultSrcsVersion().toString())
-              .allowedValues(new AllowedValueSet(PythonVersion.getAllValues())))
+              .value(PythonVersion.defaultValue().toString()))
           .add(attr(":py_interpreter", LABEL).value(PY_INTERPRETER))
           // do not depend on lib2to3:2to3 rule, because it creates circular dependencies
           // 2to3 is itself written in Python and depends on many libraries.
@@ -157,8 +159,7 @@ public final class BazelPyRuleClasses {
           Python 3 support is experimental.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("default_python_version", STRING)
-               .value(PythonVersion.defaultTargetPythonVersion().toString())
-               .allowedValues(new AllowedValueSet(PythonVersion.getTargetPythonValues()))
+               .value(PythonVersion.defaultValue().toString())
                .nonconfigurable("read by PythonUtils.getNewPythonVersion, which doesn't have access"
                    + " to configuration keys"))
           /* <!-- #BLAZE_RULE($base_py_binary).ATTRIBUTE(srcs) -->

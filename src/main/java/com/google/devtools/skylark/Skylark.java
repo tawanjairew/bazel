@@ -56,7 +56,6 @@ class Skylark {
   private final Mutability mutability = Mutability.create("interpreter");
   private final Environment env =
       Environment.builder(mutability)
-          .useDefaultSemantics()
           .setGlobals(Environment.DEFAULT_GLOBALS)
           .setEventHandler(PRINT_HANDLER)
           .build();
@@ -65,7 +64,6 @@ class Skylark {
     StringBuilder input = new StringBuilder();
     System.out.print(START_PROMPT);
     try {
-      String lineSeparator = "";
       while (true) {
         String line = reader.readLine();
         if (line == null) {
@@ -74,8 +72,7 @@ class Skylark {
         if (line.isEmpty()) {
           return input.toString();
         }
-        input.append(lineSeparator).append(line);
-        lineSeparator = "\n";
+        input.append("\n").append(line);
         System.out.print(CONTINUATION_PROMPT);
       }
     } catch (IOException io) {

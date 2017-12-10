@@ -1,9 +1,10 @@
 package org.checkerframework.dataflow.cfg.node;
 
-import com.sun.source.tree.LiteralTree;
-import com.sun.source.tree.Tree;
 import java.util.Collection;
 import java.util.Collections;
+
+import com.sun.source.tree.LiteralTree;
+import com.sun.source.tree.Tree;
 
 /**
  * A node for an integer literal. For example:
@@ -13,6 +14,7 @@ import java.util.Collections;
  * </pre>
  *
  * @author Stefan Heule
+ *
  */
 public class IntegerLiteralNode extends ValueLiteralNode {
 

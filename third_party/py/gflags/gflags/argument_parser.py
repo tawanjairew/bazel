@@ -40,7 +40,7 @@ import string
 
 import six
 
-from gflags import _helpers
+import _helpers
 
 
 class _ArgumentParserCache(type):

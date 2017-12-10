@@ -27,7 +27,7 @@ import javax.annotation.Nullable;
  * batch requests ordered alphabetically by sky key string representation.
  */
 public class DeterministicHelper extends NotifyingHelper {
-  public static final MemoizingEvaluator.GraphTransformerForTesting MAKE_DETERMINISTIC =
+  static final MemoizingEvaluator.GraphTransformerForTesting MAKE_DETERMINISTIC =
       makeTransformer(Listener.NULL_LISTENER, /*deterministic=*/ true);
 
   public static MemoizingEvaluator.GraphTransformerForTesting makeTransformer(

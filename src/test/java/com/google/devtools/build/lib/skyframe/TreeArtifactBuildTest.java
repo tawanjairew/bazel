@@ -34,8 +34,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
@@ -150,25 +148,23 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     registerAction(actionOne);
 
     final Artifact normalOutput = createDerivedArtifact("normal/out");
-    Action testAction =
-        new TestAction(
-            TestAction.NO_EFFECT, ImmutableList.of(outOne), ImmutableList.of(normalOutput)) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-            try {
-              // Check the file cache for input TreeFileArtifacts.
-              ActionInputFileCache fileCache = actionExecutionContext.getActionInputFileCache();
-              assertThat(fileCache.getMetadata(outOneFileOne).isFile()).isTrue();
-              assertThat(fileCache.getMetadata(outOneFileTwo).isFile()).isTrue();
+    Action testAction = new TestAction(
+        TestAction.NO_EFFECT, ImmutableList.of(outOne), ImmutableList.of(normalOutput)) {
+      @Override
+      public void execute(ActionExecutionContext actionExecutionContext) {
+        try {
+          // Check the file cache for input TreeFileArtifacts.
+          ActionInputFileCache fileCache = actionExecutionContext.getActionInputFileCache();
+          assertThat(fileCache.getMetadata(outOneFileOne).isFile()).isTrue();
+          assertThat(fileCache.getMetadata(outOneFileTwo).isFile()).isTrue();
 
-              // Touch the action output.
-              touchFile(normalOutput);
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
+          // Touch the action output.
+          touchFile(normalOutput);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
 
     registerAction(testAction);
     buildArtifact(normalOutput);
@@ -474,23 +470,21 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   public void testOutputsAreReadOnlyAndExecutable() throws Exception {
     final Artifact out = createTreeArtifact("output");
 
-    TreeArtifactTestAction action =
-        new TreeArtifactTestAction(out) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-            try {
-              writeFile(out.getPath().getChild("one"), "one");
-              writeFile(out.getPath().getChild("two"), "two");
-              writeFile(out.getPath().getChild("three").getChild("four"), "three/four");
-              registerOutput(actionExecutionContext, "one");
-              registerOutput(actionExecutionContext, "two");
-              registerOutput(actionExecutionContext, "three/four");
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
+    TreeArtifactTestAction action = new TreeArtifactTestAction(out) {
+      @Override
+      public void execute(ActionExecutionContext actionExecutionContext) {
+        try {
+          writeFile(out.getPath().getChild("one"), "one");
+          writeFile(out.getPath().getChild("two"), "two");
+          writeFile(out.getPath().getChild("three").getChild("four"), "three/four");
+          registerOutput(actionExecutionContext, "one");
+          registerOutput(actionExecutionContext, "two");
+          registerOutput(actionExecutionContext, "three/four");
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
 
     registerAction(action);
 
@@ -507,21 +501,20 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   public void testValidRelativeSymlinkAccepted() throws Exception {
     final Artifact out = createTreeArtifact("output");
 
-    TreeArtifactTestAction action =
-        new TreeArtifactTestAction(out) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-            try {
-              writeFile(out.getPath().getChild("one"), "one");
-              writeFile(out.getPath().getChild("two"), "two");
-              FileSystemUtils.ensureSymbolicLink(
-                  out.getPath().getChild("links").getChild("link"), "../one");
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
+    TreeArtifactTestAction action = new TreeArtifactTestAction(out) {
+      @Override
+      public void execute(ActionExecutionContext actionExecutionContext) {
+        try {
+          writeFile(out.getPath().getChild("one"), "one");
+          writeFile(out.getPath().getChild("two"), "two");
+          FileSystemUtils.ensureSymbolicLink(
+              out.getPath().getChild("links").getChild("link"),
+              "../one");
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
 
     registerAction(action);
 
@@ -537,21 +530,20 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     final Artifact out = createTreeArtifact("output");
 
-    TreeArtifactTestAction action =
-        new TreeArtifactTestAction(out) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-            try {
-              writeFile(out.getPath().getChild("one"), "one");
-              writeFile(out.getPath().getChild("two"), "two");
-              FileSystemUtils.ensureSymbolicLink(
-                  out.getPath().getChild("links").getChild("link"), "../invalid");
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
+    TreeArtifactTestAction action = new TreeArtifactTestAction(out) {
+      @Override
+      public void execute(ActionExecutionContext actionExecutionContext) {
+        try {
+          writeFile(out.getPath().getChild("one"), "one");
+          writeFile(out.getPath().getChild("two"), "two");
+          FileSystemUtils.ensureSymbolicLink(
+              out.getPath().getChild("links").getChild("link"),
+              "../invalid");
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
 
     registerAction(action);
 
@@ -577,21 +569,20 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     final Artifact out = createTreeArtifact("output");
 
-    TreeArtifactTestAction action =
-        new TreeArtifactTestAction(out) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-            try {
-              writeFile(out.getPath().getChild("one"), "one");
-              writeFile(out.getPath().getChild("two"), "two");
-              FileSystemUtils.ensureSymbolicLink(
-                  out.getPath().getChild("links").getChild("link"), "/random/pointer");
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
+    TreeArtifactTestAction action = new TreeArtifactTestAction(out) {
+      @Override
+      public void execute(ActionExecutionContext actionExecutionContext) {
+        try {
+          writeFile(out.getPath().getChild("one"), "one");
+          writeFile(out.getPath().getChild("two"), "two");
+          FileSystemUtils.ensureSymbolicLink(
+              out.getPath().getChild("links").getChild("link"),
+              "/random/pointer");
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
 
     registerAction(action);
 
@@ -616,7 +607,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     TreeArtifactTestAction action =
         new TreeArtifactTestAction(out) {
           @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
+          public void execute(ActionExecutionContext actionExecutionContext) {
             try {
               writeFile(out.getPath().getChild("one"), "one");
               writeFile(out.getPath().getChild("two"), "two");
@@ -625,7 +616,6 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
             } catch (Exception e) {
               throw new RuntimeException(e);
             }
-            return ActionResult.EMPTY;
           }
         };
 
@@ -643,21 +633,20 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     final Artifact out = createTreeArtifact("output");
 
-    TreeArtifactTestAction action =
-        new TreeArtifactTestAction(out) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-            try {
-              writeFile(out.getPath().getChild("one"), "one");
-              writeFile(out.getPath().getChild("two"), "two");
-              FileSystemUtils.ensureSymbolicLink(
-                  out.getPath().getChild("links").getChild("link"), "../../output/random/pointer");
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
+    TreeArtifactTestAction action = new TreeArtifactTestAction(out) {
+      @Override
+      public void execute(ActionExecutionContext actionExecutionContext) {
+        try {
+          writeFile(out.getPath().getChild("one"), "one");
+          writeFile(out.getPath().getChild("two"), "two");
+          FileSystemUtils.ensureSymbolicLink(
+              out.getPath().getChild("links").getChild("link"),
+              "../../output/random/pointer");
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
 
     registerAction(action);
 
@@ -684,33 +673,27 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   // TODO(bazel-team): write real tests for injectDigest, here and elsewhere.
   @Test
   public void testDigestInjection() throws Exception {
-    TreeArtifactTestAction action =
-        new TreeArtifactTestAction(outOne) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext)
-              throws ActionExecutionException {
-            try {
-              writeFile(outOneFileOne, "one");
-              writeFile(outOneFileTwo, "two");
+    TreeArtifactTestAction action = new TreeArtifactTestAction(outOne) {
+      @Override
+      public void execute(ActionExecutionContext actionExecutionContext)
+          throws ActionExecutionException {
+        try {
+          writeFile(outOneFileOne, "one");
+          writeFile(outOneFileTwo, "two");
 
-              MetadataHandler md = actionExecutionContext.getMetadataHandler();
-              FileStatus stat = outOneFileOne.getPath().stat(Symlinks.NOFOLLOW);
-              md.injectDigest(
-                  outOneFileOne,
-                  stat,
-                  Hashing.md5().hashString("one", Charset.forName("UTF-8")).asBytes());
+          MetadataHandler md = actionExecutionContext.getMetadataHandler();
+          FileStatus stat = outOneFileOne.getPath().stat(Symlinks.NOFOLLOW);
+          md.injectDigest(outOneFileOne,
+              stat, Hashing.md5().hashString("one", Charset.forName("UTF-8")).asBytes());
 
-              stat = outOneFileTwo.getPath().stat(Symlinks.NOFOLLOW);
-              md.injectDigest(
-                  outOneFileTwo,
-                  stat,
-                  Hashing.md5().hashString("two", Charset.forName("UTF-8")).asBytes());
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
+          stat = outOneFileTwo.getPath().stat(Symlinks.NOFOLLOW);
+          md.injectDigest(outOneFileTwo,
+              stat, Hashing.md5().hashString("two", Charset.forName("UTF-8")).asBytes());
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
 
     registerAction(action);
     buildArtifact(action.getSoleOutput());
@@ -743,12 +726,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     Action noGenerateOutputAction = new DummyAction(
         ImmutableList.<Artifact>of(treeFileArtifactB), expectedOutputTreeFileArtifact2);
 
-    actionTemplateExpansionFunction =
-        new DummyActionTemplateExpansionFunction(
-            actionKeyContext,
-            ImmutableMultimap.<ActionTemplate<?>, Action>of(
-                actionTemplate, generateOutputAction,
-                actionTemplate, noGenerateOutputAction));
+    actionTemplateExpansionFunction = new DummyActionTemplateExpansionFunction(
+        ImmutableMultimap.<ActionTemplate<?>, Action>of(
+            actionTemplate, generateOutputAction,
+            actionTemplate, noGenerateOutputAction));
 
     buildArtifact(artifact2);
   }
@@ -785,12 +766,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         ImmutableList.<Artifact>of(treeFileArtifactB),
         ImmutableList.<Artifact>of(expectedOutputTreeFileArtifact2));
 
-    actionTemplateExpansionFunction =
-        new DummyActionTemplateExpansionFunction(
-            actionKeyContext,
-            ImmutableMultimap.<ActionTemplate<?>, Action>of(
-                actionTemplate, generateOutputAction,
-                actionTemplate, noGenerateOutputAction));
+    actionTemplateExpansionFunction = new DummyActionTemplateExpansionFunction(
+        ImmutableMultimap.<ActionTemplate<?>, Action>of(
+            actionTemplate, generateOutputAction,
+            actionTemplate, noGenerateOutputAction));
 
     try {
       buildArtifact(artifact2);
@@ -831,13 +810,11 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     Action throwingAction = new ThrowingDummyAction(
         ImmutableList.<Artifact>of(treeFileArtifactB),
         ImmutableList.<Artifact>of(expectedOutputTreeFileArtifact2));
-
-    actionTemplateExpansionFunction =
-        new DummyActionTemplateExpansionFunction(
-            actionKeyContext,
-            ImmutableMultimap.<ActionTemplate<?>, Action>of(
-                actionTemplate, generateOutputAction,
-                actionTemplate, throwingAction));
+    
+    actionTemplateExpansionFunction = new DummyActionTemplateExpansionFunction(
+        ImmutableMultimap.<ActionTemplate<?>, Action>of(
+            actionTemplate, generateOutputAction,
+            actionTemplate, throwingAction));
 
     try {
       buildArtifact(artifact2);
@@ -877,13 +854,11 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     Action anotherThrowingAction = new ThrowingDummyAction(
         ImmutableList.<Artifact>of(treeFileArtifactB),
         ImmutableList.<Artifact>of(expectedOutputTreeFileArtifact2));
-
-    actionTemplateExpansionFunction =
-        new DummyActionTemplateExpansionFunction(
-            actionKeyContext,
-            ImmutableMultimap.<ActionTemplate<?>, Action>of(
-                actionTemplate, throwingAction,
-                actionTemplate, anotherThrowingAction));
+    
+    actionTemplateExpansionFunction = new DummyActionTemplateExpansionFunction(
+        ImmutableMultimap.<ActionTemplate<?>, Action>of(
+            actionTemplate, throwingAction,
+            actionTemplate, anotherThrowingAction));
 
     try {
       buildArtifact(artifact2);
@@ -1005,7 +980,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext)
+    public void execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
       if (getInputs().iterator().hasNext()) {
         // Sanity check--verify all inputs exist.
@@ -1035,7 +1010,6 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
         throw new ActionExecutionException("TestAction failed due to exception",
             e, this, false);
       }
-      return ActionResult.EMPTY;
     }
 
     void executeTestBehavior(ActionExecutionContext c) throws ActionExecutionException {
@@ -1226,13 +1200,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
   /** A dummy action template expansion function that just returns the injected actions */
   private static class DummyActionTemplateExpansionFunction implements SkyFunction {
-    private final ActionKeyContext actionKeyContext;
     private final Multimap<ActionTemplate<?>, Action> actionTemplateToActionMap;
 
     DummyActionTemplateExpansionFunction(
-        ActionKeyContext actionKeyContext,
         Multimap<ActionTemplate<?>, Action> actionTemplateToActionMap) {
-      this.actionKeyContext = actionKeyContext;
       this.actionTemplateToActionMap = actionTemplateToActionMap;
     }
 
@@ -1241,9 +1212,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
       ActionTemplateExpansionKey key = (ActionTemplateExpansionKey) skyKey.argument();
       ActionTemplate<?> actionTemplate = key.getActionTemplate();
       return new ActionTemplateExpansionValue(
-          actionKeyContext,
-          Preconditions.checkNotNull(actionTemplateToActionMap.get(actionTemplate)),
-          false);
+          Preconditions.checkNotNull(actionTemplateToActionMap.get(actionTemplate)), false);
     }
 
     @Override
@@ -1260,10 +1229,8 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     /** Do nothing */
     @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext)
-        throws ActionExecutionException {
-      return ActionResult.EMPTY;
-    }
+    public void execute(ActionExecutionContext actionExecutionContext)
+        throws ActionExecutionException {}
   }
 
   /** No-op action that throws when executed */
@@ -1274,7 +1241,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     /** Throws */
     @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext)
+    public void execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
       throw new ActionExecutionException("Throwing dummy action", this, true);
     }

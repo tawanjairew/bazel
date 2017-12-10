@@ -20,8 +20,7 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -101,7 +100,7 @@ public class ASTFileLookupFunction implements SkyFunction {
     if (!fileValue.isFile()) {
       return ASTFileLookupValue.forBadFile(fileLabel);
     }
-    SkylarkSemantics skylarkSemantics = PrecomputedValue.SKYLARK_SEMANTICS.get(env);
+    SkylarkSemanticsOptions skylarkSemantics = PrecomputedValue.SKYLARK_SEMANTICS.get(env);
     if (skylarkSemantics == null) {
       return null;
     }
@@ -126,10 +125,7 @@ public class ASTFileLookupFunction implements SkyFunction {
                     /*importMap=*/ null)
                 .setupDynamic(Runtime.PKG_NAME, Runtime.NONE)
                 .setupDynamic(Runtime.REPOSITORY_NAME, Runtime.NONE);
-        byte[] bytes = FileSystemUtils.readWithKnownFileSize(path, astFileSize);
-        ast =
-            BuildFileAST.parseSkylarkFile(
-                bytes, path.getDigest(), path.asFragment(), env.getListener());
+          ast = BuildFileAST.parseSkylarkFile(path, astFileSize, env.getListener());
           ast = ast.validate(validationEnv, env.getListener());
         }
     } catch (IOException e) {

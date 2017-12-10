@@ -15,12 +15,12 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
+import com.google.devtools.build.lib.packages.PackageSpecification;
 
 /**
  * A {@link TransitiveInfoProvider} that describes a set of transitive package specifications
  * used in package groups.
  */
 public interface PackageSpecificationProvider extends TransitiveInfoProvider {
-  NestedSet<PackageGroupContents> getPackageSpecifications();
+  NestedSet<PackageSpecification> getPackageSpecifications();
 }

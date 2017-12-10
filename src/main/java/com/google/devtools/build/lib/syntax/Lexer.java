@@ -184,12 +184,7 @@ public final class Lexer {
 
     @Override
     public LineAndColumn getEndLineAndColumn() {
-      // The end offset is the location *past* the actual end position --> subtract 1:
-      int endOffset = getEndOffset() - 1;
-      if (endOffset < 0) {
-        endOffset = 0;
-      }
-      return lineNumberTable.getLineAndColumn(endOffset);
+      return lineNumberTable.getLineAndColumn(getEndOffset());
     }
 
 

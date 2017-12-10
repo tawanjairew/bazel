@@ -1,10 +1,13 @@
 package org.checkerframework.dataflow.cfg.node;
 
-import com.sun.source.tree.VariableTree;
 import java.util.Collection;
 import java.util.Collections;
+
 import org.checkerframework.dataflow.util.HashCodeUtils;
+
 import org.checkerframework.javacutil.InternalUtils;
+
+import com.sun.source.tree.VariableTree;
 
 /**
  * A node for a local variable declaration:
@@ -13,10 +16,11 @@ import org.checkerframework.javacutil.InternalUtils;
  *   <em>modifier</em> <em>type</em> <em>identifier</em>;
  * </pre>
  *
- * Note: Does not have an initializer block, as that will be translated to a separate {@link
- * AssignmentNode}.
+ * Note: Does not have an initializer block, as that will be translated to a
+ * separate {@link AssignmentNode}.
  *
  * @author Stefan Heule
+ *
  */
 public class VariableDeclarationNode extends Node {
 
@@ -68,4 +72,5 @@ public class VariableDeclarationNode extends Node {
     public Collection<Node> getOperands() {
         return Collections.emptyList();
     }
+
 }

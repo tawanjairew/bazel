@@ -48,7 +48,6 @@ public class ResourceContainerConverter {
     private boolean includeManifest;
     private boolean includeRTxt;
     private boolean includeSymbolsBin;
-    private boolean includeCompiledSymbols;
     private boolean includeStaticLibrary;
     private boolean includeAapt2RTxt;
     private SeparatorType separatorType;
@@ -96,11 +95,6 @@ public class ResourceContainerConverter {
 
     Builder includeSymbolsBin() {
       includeSymbolsBin = true;
-      return this;
-    }
-
-    Builder includeCompiledSymbols() {
-      includeCompiledSymbols = true;
       return this;
     }
 
@@ -158,12 +152,6 @@ public class ResourceContainerConverter {
                     ? ""
                     : container.getStaticLibrary().getExecPathString());
           }
-          if (includeCompiledSymbols) {
-            cmdPieces.add(
-                container.getCompiledSymbols() == null
-                    ? ""
-                    : container.getCompiledSymbols().getExecPathString());
-          }
           if (includeSymbolsBin) {
             cmdPieces.add(
                 container.getSymbols() == null ? "" : container.getSymbols().getExecPathString());
@@ -204,12 +192,12 @@ public class ResourceContainerConverter {
     cmdBuilder.addAll(
         "--data",
         VectorArg.join(toArg.listSeparator())
-            .each(dependencies.getTransitiveResourceContainers())
+            .each(dependencies.getTransitiveResources())
             .mapped(toArg));
     cmdBuilder.addAll(
         "--directData",
         VectorArg.join(toArg.listSeparator())
-            .each(dependencies.getDirectResourceContainers())
+            .each(dependencies.getDirectResources())
             .mapped(toArg));
   }
 }

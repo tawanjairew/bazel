@@ -14,16 +14,13 @@
 package com.google.devtools.build.lib.worker;
 
 import com.google.common.hash.HashCode;
-import com.google.devtools.build.lib.shell.Subprocess;
-import com.google.devtools.build.lib.shell.SubprocessBuilder;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.ProcessBuilder.Redirect;
 import java.util.SortedMap;
 
 /**
@@ -43,7 +40,7 @@ class Worker {
   private final Path workDir;
   private final Path logFile;
 
-  private Subprocess process;
+  private Process process;
   private Thread shutdownHook;
 
   Worker(WorkerKey workerKey, int workerId, final Path workDir, Path logFile) {
@@ -69,17 +66,19 @@ class Worker {
   }
 
   void createProcess() throws IOException {
-    List<String> args = workerKey.getArgs();
-    File executable = new File(args.get(0));
+    String[] command = workerKey.getArgs().toArray(new String[0]);
+
+    // Follows the logic of {@link com.google.devtools.build.lib.shell.Command}.
+    File executable = new File(command[0]);
     if (!executable.isAbsolute() && executable.getParent() != null) {
-      args = new ArrayList<>(args);
-      args.set(0, new File(workDir.getPathFile(), args.get(0)).getAbsolutePath());
+      command[0] = new File(workDir.getPathFile(), command[0]).getAbsolutePath();
     }
-    SubprocessBuilder processBuilder = new SubprocessBuilder();
-    processBuilder.setArgv(args);
-    processBuilder.setWorkingDirectory(workDir.getPathFile());
-    processBuilder.setStderr(logFile.getPathFile());
-    processBuilder.setEnv(workerKey.getEnv());
+    ProcessBuilder processBuilder =
+        new ProcessBuilder(command)
+            .directory(workDir.getPathFile())
+            .redirectError(Redirect.appendTo(logFile.getPathFile()));
+    processBuilder.environment().clear();
+    processBuilder.environment().putAll(workerKey.getEnv());
 
     this.process = processBuilder.start();
   }
@@ -99,7 +98,7 @@ class Worker {
    *
    * @param process the process to destroy.
    */
-  private static void destroyProcess(Subprocess process) {
+  private static void destroyProcess(Process process) {
     boolean wasInterrupted = false;
     try {
       process.destroy();

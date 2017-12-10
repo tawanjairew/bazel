@@ -23,9 +23,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.rules.config.ConfigRules;
 import com.google.devtools.build.lib.rules.core.CoreRules;
-import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -89,7 +87,7 @@ public class BazelRuleClassProviderTest {
 
   @Test
   public void coreWorkspaceConsistency() {
-    checkModule(CoreWorkspaceRules.INSTANCE);
+    checkModule(BazelRuleClassProvider.CORE_WORKSPACE_RULES);
   }
 
   @Test
@@ -99,7 +97,7 @@ public class BazelRuleClassProviderTest {
 
   @Test
   public void configConsistency() {
-    checkModule(ConfigRules.INSTANCE);
+    checkModule(BazelRuleClassProvider.CONFIG_RULES);
   }
 
   @Test

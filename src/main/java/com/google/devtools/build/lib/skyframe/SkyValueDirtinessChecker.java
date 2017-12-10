@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import javax.annotation.Nullable;
 
 /**
@@ -56,7 +57,7 @@ public abstract class SkyValueDirtinessChecker {
      * graph.
      */
     public static DirtyResult notDirty(SkyValue oldValue) {
-      return new DirtyResult(/*isDirty=*/false, oldValue,  /*newValue=*/null);
+      return new DirtyResult(/*dirty=*/false, oldValue,  /*newValue=*/null);
     }
 
     /**
@@ -64,7 +65,7 @@ public abstract class SkyValueDirtinessChecker {
      * graph, but this new value is not known.
      */
     public static DirtyResult dirty(@Nullable SkyValue oldValue) {
-      return new DirtyResult(/*isDirty=*/true, oldValue, /*newValue=*/null);
+      return new DirtyResult(/*dirty=*/true, oldValue, /*newValue=*/null);
     }
 
     /**
@@ -72,7 +73,7 @@ public abstract class SkyValueDirtinessChecker {
      * different from the value in the graph,
      */
     public static DirtyResult dirtyWithNewValue(@Nullable SkyValue oldValue, SkyValue newValue) {
-      return new DirtyResult(/*isDirty=*/true, oldValue, newValue);
+      return new DirtyResult(/*dirty=*/true, oldValue, newValue);
     }
 
     private final boolean isDirty;

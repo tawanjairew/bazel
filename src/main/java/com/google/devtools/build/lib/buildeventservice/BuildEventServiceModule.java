@@ -44,6 +44,7 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.util.Set;
+import java.util.UUID;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -85,7 +86,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
             commandEnvironment.getRuntime().getClock(),
             commandEnvironment.getRuntime().getPathToUriConverter(),
             commandEnvironment.getReporter(),
-            commandEnvironment.getBuildRequestId().toString(),
+            commandEnvironment.getClientEnv().get("BAZEL_INTERNAL_BUILD_REQUEST_ID"),
             commandEnvironment.getCommandId().toString(),
             commandEnvironment.getCommandName());
     if (streamer != null) {
@@ -125,6 +126,8 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   /**
    * Returns {@code null} if no stream could be created.
+   *
+   * @param buildRequestId if {@code null} or {@code ""} a random UUID is used instead.
    */
   @Nullable
   @VisibleForTesting
@@ -210,6 +213,9 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       logger.fine(format("Will create BuildEventServiceTransport streaming to '%s'",
           besOptions.besBackend));
 
+      buildRequestId = isNullOrEmpty(buildRequestId)
+          ? UUID.randomUUID().toString()
+          : buildRequestId;
       commandLineReporter.handle(
           Event.info(
               format(
@@ -229,8 +235,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
               clock,
               pathConverter,
               commandLineReporter,
-              besOptions.projectId,
-              keywords(besOptions));
+              besOptions.projectId);
       logger.fine("BuildEventServiceTransport was created successfully");
       return besTransport;
     }
@@ -249,12 +254,4 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       AuthAndTLSOptions authAndTLSOptions) throws IOException;
 
   protected abstract Set<String> whitelistedCommands();
-
-  protected Set<String> keywords(T besOptions) {
-    return besOptions
-        .besKeywords
-        .stream()
-        .map(keyword -> "user_keyword=" + keyword)
-        .collect(ImmutableSet.toImmutableSet());
-  }
 }

@@ -19,6 +19,7 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -75,10 +76,8 @@ public class CppOutputGroupsTest extends BuildViewTestCase {
 
     assertThat(ActionsTestUtil.prettyArtifactNames(getFilesToBuild(groupArchive)))
         .containsExactly("a/liblib.a");
-    // If supports_interface_shared_objects is true, .ifso could also be generated.
-    // So we here use contains instead containsExactly.
     assertThat(ActionsTestUtil.prettyArtifactNames(getFilesToBuild(groupDynamic)))
-        .contains("a/liblib.so");
+        .containsExactly("a/liblib.so");
   }
 
   @Test
@@ -95,9 +94,7 @@ public class CppOutputGroupsTest extends BuildViewTestCase {
 
     assertThat(ActionsTestUtil.prettyArtifactNames(getFilesToBuild(groupArchive)))
         .containsExactly("a/liblib.lo");
-    // If supports_interface_shared_objects is true, .ifso could also be generated.
-    // So we here use contains instead containsExactly.
     assertThat(ActionsTestUtil.prettyArtifactNames(getFilesToBuild(groupDynamic)))
-        .contains("a/liblib.so");
+        .containsExactly("a/liblib.so");
   }
 }

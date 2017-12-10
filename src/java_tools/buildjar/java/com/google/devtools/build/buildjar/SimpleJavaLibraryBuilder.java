@@ -29,6 +29,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
@@ -49,7 +50,7 @@ public class SimpleJavaLibraryBuilder implements Closeable {
   }
 
   protected void prepareSourceCompilation(JavaLibraryBuildRequest build) throws IOException {
-    Path classDirectory = build.getClassDir();
+    Path classDirectory = Paths.get(build.getClassDir());
     if (Files.exists(classDirectory)) {
       try {
         // Necessary for local builds in order to discard previous outputs
@@ -64,7 +65,7 @@ public class SimpleJavaLibraryBuilder implements Closeable {
 
     // Create sourceGenDir if necessary.
     if (build.getSourceGenDir() != null) {
-      Path sourceGenDir = build.getSourceGenDir();
+      Path sourceGenDir = Paths.get(build.getSourceGenDir());
       if (Files.exists(sourceGenDir)) {
         try {
           cleanupDirectory(sourceGenDir);
@@ -149,10 +150,11 @@ public class SimpleJavaLibraryBuilder implements Closeable {
    * the build request. Empties the temporary directory, if it exists.
    */
   private void setUpSourceJars(JavaLibraryBuildRequest build) throws IOException {
-    Path sourcesDir = build.getTempDir();
+    String sourcesDir = build.getTempDir();
 
-    if (Files.exists(sourcesDir)) {
-      cleanupDirectory(sourcesDir);
+    Path sourceDirFile = Paths.get(sourcesDir);
+    if (Files.exists(sourceDirFile)) {
+      cleanupDirectory(sourceDirFile);
     }
 
     if (build.getSourceJars().isEmpty()) {
@@ -160,8 +162,8 @@ public class SimpleJavaLibraryBuilder implements Closeable {
     }
 
     final ByteArrayOutputStream protobufMetadataBuffer = new ByteArrayOutputStream();
-    for (Path sourceJar : build.getSourceJars()) {
-      for (Path root : getJarFileSystem(sourceJar).getRootDirectories()) {
+    for (String sourceJar : build.getSourceJars()) {
+      for (Path root : getJarFileSystem(Paths.get(sourceJar)).getRootDirectories()) {
         Files.walkFileTree(
             root,
             new SimpleFileVisitor<Path>() {
@@ -179,7 +181,7 @@ public class SimpleJavaLibraryBuilder implements Closeable {
             });
       }
     }
-    Path output = build.getClassDir().resolve(PROTOBUF_META_NAME);
+    Path output = Paths.get(build.getClassDir(), PROTOBUF_META_NAME);
     if (protobufMetadataBuffer.size() > 0) {
       try (OutputStream outputStream = Files.newOutputStream(output)) {
         protobufMetadataBuffer.writeTo(outputStream);

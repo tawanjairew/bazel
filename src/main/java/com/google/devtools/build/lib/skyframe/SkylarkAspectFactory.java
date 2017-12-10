@@ -66,19 +66,19 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
       }
       Environment env =
           Environment.builder(mutability)
+              .setGlobals(skylarkAspect.getFuncallEnv().getGlobals())
               .setSemantics(analysisEnv.getSkylarkSemantics())
               .setEventHandler(analysisEnv.getEventHandler())
-              // NB: loading phase functions are not available: this is analysis already, so we do
-              // *not* setLoadingPhase().
-              .build();
+              .build(); // NB: loading phase functions are not available: this is analysis already,
+      // so we do *not* setLoadingPhase().
       Object aspectSkylarkObject;
       try {
         aspectSkylarkObject =
             skylarkAspect
                 .getImplementation()
                 .call(
-                    /*args=*/ ImmutableList.of(base, skylarkRuleContext),
-                    /* kwargs= */ ImmutableMap.of(),
+                    ImmutableList.<Object>of(base, skylarkRuleContext),
+                    ImmutableMap.<String, Object>of(),
                     /*ast=*/ null,
                     env);
 

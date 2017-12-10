@@ -24,10 +24,8 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.util.List;
@@ -151,13 +149,7 @@ public class WorkspaceFactoryTest {
           root);
       Exception exception = null;
       try {
-        byte[] bytes =
-            FileSystemUtils.readWithKnownFileSize(
-                workspaceFilePath, workspaceFilePath.getFileSize());
-        factory.parse(
-            ParserInputSource.create(bytes, workspaceFilePath.asFragment()),
-            SkylarkSemantics.DEFAULT_SEMANTICS,
-            eventHandler);
+        factory.parse(ParserInputSource.create(workspaceFilePath), eventHandler);
       } catch (BuildFileContainsErrorsException e) {
         exception = e;
       } catch (IOException | InterruptedException e) {

@@ -46,12 +46,8 @@ import java.util.List;
  */
 // TODO(skylark-team): Check that UPPERCASE_VARIABLES are never mutated
 public class NamingConventionsChecker extends AstVisitorWithNameResolution {
-  private static final String NAME_WITH_WRONG_CASE_CATEGORY = "name-with-wrong-case";
-  private static final String PROVIDER_NAME_ENDS_IN_INFO_CATEGORY = "provider-name-suffix";
-  private static final String CONFUSING_NAME_CATEGORY = "confusing-name";
   private static final ImmutableList<String> CONFUSING_NAMES = ImmutableList.of("O", "I", "l");
   private static final ImmutableSet<String> BUILTIN_NAMES;
-
   private final List<Issue> issues = new ArrayList<>();
 
   static {
@@ -88,8 +84,7 @@ public class NamingConventionsChecker extends AstVisitorWithNameResolution {
   private void checkSnakeCase(String name, Location location) {
     if (!isSnakeCase(name)) {
       issues.add(
-          Issue.create(
-              NAME_WITH_WRONG_CASE_CATEGORY,
+          new Issue(
               "identifier '"
                   + name
                   + "' should be lower_snake_case (for variables)"
@@ -100,52 +95,33 @@ public class NamingConventionsChecker extends AstVisitorWithNameResolution {
 
   private void checkLowerSnakeCase(String name, Location location) {
     if (!isLowerSnakeCase(name)) {
-      issues.add(
-          Issue.create(
-              NAME_WITH_WRONG_CASE_CATEGORY,
-              "identifier '" + name + "' should be lower_snake_case",
-              location));
+      issues.add(new Issue("identifier '" + name + "' should be lower_snake_case", location));
     }
   }
 
   private void checkProviderName(String name, Location location) {
     if (!isUpperCamelCase(name)) {
-      issues.add(
-          Issue.create(
-              NAME_WITH_WRONG_CASE_CATEGORY,
-              "provider name '" + name + "' should be UpperCamelCase",
-              location));
-    }
-    if (!name.endsWith("Info")) {
-      issues.add(
-          Issue.create(
-              PROVIDER_NAME_ENDS_IN_INFO_CATEGORY,
-              "provider name '" + name + "' should end in the suffix 'Info'",
-              location)
-          );
+      issues.add(new Issue("provider name '" + name + "' should be UpperCamelCase", location));
     }
   }
 
   private void checkNameNotConfusing(String name, Location location) {
     if (CONFUSING_NAMES.contains(name)) {
       issues.add(
-          Issue.create(
-              CONFUSING_NAME_CATEGORY,
+          new Issue(
               "never use 'l', 'I', or 'O' as names "
                   + "(they're too easily confused with 'I', 'l', or '0')",
               location));
     }
     if (BUILTIN_NAMES.contains(name)) {
       issues.add(
-          Issue.create(
-              CONFUSING_NAME_CATEGORY,
+          new Issue(
               "identifier '" + name + "' shadows a builtin; please pick a different name",
               location));
     }
     if (name.chars().allMatch(c -> c == '_') && name.length() >= 2) {
       issues.add(
-          Issue.create(
-              CONFUSING_NAME_CATEGORY,
+          new Issue(
               "identifier '"
                   + name
                   + "' consists only of underscores; please pick a different name",
@@ -157,8 +133,7 @@ public class NamingConventionsChecker extends AstVisitorWithNameResolution {
   void use(Identifier identifier) {
     if (identifier.getName().equals("_")) {
       issues.add(
-          Issue.create(
-              CONFUSING_NAME_CATEGORY,
+          new Issue(
               "don't use '_' as an identifier, only to ignore the result in an assignment",
               identifier.getLocation()));
     }
@@ -167,10 +142,6 @@ public class NamingConventionsChecker extends AstVisitorWithNameResolution {
   @Override
   void declare(String name, ASTNode node) {
     NameInfo nameInfo = env.resolveExistingName(name);
-    if (nameInfo.kind == Kind.IMPORTED) {
-      // Users may not have control over imported names, so ignore them:
-      return;
-    }
     checkNameNotConfusing(name, node.getLocation());
     if (nameInfo.kind == Kind.PARAMETER || nameInfo.kind == Kind.FUNCTION) {
       checkLowerSnakeCase(nameInfo.name, node.getLocation());
@@ -180,9 +151,6 @@ public class NamingConventionsChecker extends AstVisitorWithNameResolution {
   }
 
   private static boolean isUpperCamelCase(String name) {
-    if (name.startsWith("_")) {
-      name = name.substring(1); // private providers are allowed
-    }
     return !name.contains("_") && Character.isUpperCase(name.charAt(0));
   }
 

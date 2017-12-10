@@ -70,7 +70,6 @@ genrule(
         "rm -fr \"$${JARJAR}\"",
     ]),
     tags = ["manual"],
-    toolchains = ["@bazel_tools//tools/jdk:current_java_runtime"],
     tools = [
         "//src/java_tools/singlejar:SingleJar_deploy.jar",
         "//third_party/java/jarjar:jarjar_bin_deploy.jar",

@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.PathCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
@@ -38,14 +37,12 @@ public class BlazeDirectoriesCodec implements ObjectCodec<BlazeDirectories> {
   }
 
   @Override
-  public void serialize(BlazeDirectories obj, CodedOutputStream codedOut)
-      throws IOException, SerializationException {
+  public void serialize(BlazeDirectories obj, CodedOutputStream codedOut) throws IOException {
     obj.serialize(codedOut, pathCodec);
   }
 
   @Override
-  public BlazeDirectories deserialize(CodedInputStream codedIn)
-      throws IOException, SerializationException {
+  public BlazeDirectories deserialize(CodedInputStream codedIn) throws IOException {
     return BlazeDirectories.deserialize(codedIn, pathCodec);
   }
 }

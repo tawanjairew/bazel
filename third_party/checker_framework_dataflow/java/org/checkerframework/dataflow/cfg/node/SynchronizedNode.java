@@ -10,12 +10,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Otherwise it is the node immediately after a synchronized code block.
  */
 
-import com.sun.source.tree.Tree;
+import org.checkerframework.dataflow.util.HashCodeUtils;
+
 import java.util.Collection;
 import java.util.Collections;
+
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.Types;
-import org.checkerframework.dataflow.util.HashCodeUtils;
+
+import com.sun.source.tree.Tree;
 
 public class SynchronizedNode extends Node {
 
@@ -23,8 +26,7 @@ public class SynchronizedNode extends Node {
     protected Node expression;
     protected boolean startOfBlock;
 
-    public SynchronizedNode(
-            /*@Nullable*/ Tree tree, Node expression, boolean startOfBlock, Types types) {
+    public SynchronizedNode(/*@Nullable*/ Tree tree, Node expression, boolean startOfBlock, Types types) {
         super(types.getNoType(TypeKind.NONE));
         this.tree = tree;
         this.expression = expression;

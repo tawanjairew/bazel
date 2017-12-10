@@ -44,7 +44,7 @@ public class WindowsFileOperationsTest {
 
   @Before
   public void loadJni() throws Exception {
-    scratchRoot = new File(System.getenv("TEST_TMPDIR"), "x").getAbsolutePath();
+    scratchRoot = new File(System.getenv("TEST_TMPDIR")).getAbsolutePath() + "/x";
     testUtil = new WindowsTestUtil(scratchRoot);
     cleanupScratchDir();
   }
@@ -115,7 +115,7 @@ public class WindowsFileOperationsTest {
       WindowsFileOperations.isJunction(root + "/non-existent");
       fail("expected to throw");
     } catch (IOException e) {
-      assertThat(e.getMessage()).contains("nativeIsJunction");
+      assertThat(e.getMessage()).contains("GetFileAttributes");
     }
     assertThat(Arrays.asList(new File(root + "/shrtpath/a").list())).containsExactly("file1.txt");
     assertThat(Arrays.asList(new File(root + "/shrtpath/b").list())).containsExactly("file2.txt");

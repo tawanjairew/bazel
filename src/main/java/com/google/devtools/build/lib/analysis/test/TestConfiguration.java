@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.test;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.RunsPerTestConverter;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -195,7 +194,7 @@ public class TestConfiguration extends Fragment {
    *     filters, runs it once.
    */
   public int getRunsPerTestForLabel(Label label) {
-    for (PerLabelOptions perLabelRuns : Lists.reverse(options.runsPerTest)) {
+    for (PerLabelOptions perLabelRuns : options.runsPerTest) {
       if (perLabelRuns.isIncluded(label)) {
         return Integer.parseInt(Iterables.getOnlyElement(perLabelRuns.getOptions()));
       }

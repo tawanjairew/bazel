@@ -157,7 +157,7 @@ public class CppOptions extends FragmentOptions {
 
   // This is different from --platform_suffix in that that one is designed to facilitate the
   // migration to toolchains and this one is designed to eliminate the C++ toolchain identifier
-  // from the output directory path.
+  // form the output directory path.
   @Option(
     name = "cc_output_directory_tag",
     defaultValue = "",
@@ -221,7 +221,7 @@ public class CppOptions extends FragmentOptions {
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {
       OptionEffectTag.LOADING_AND_ANALYSIS,
-      OptionEffectTag.ACTION_COMMAND_LINES,
+      OptionEffectTag.ACTION_OPTIONS,
       OptionEffectTag.AFFECTS_OUTPUTS
     },
     help =
@@ -296,6 +296,22 @@ public class CppOptions extends FragmentOptions {
   public boolean forceIgnoreDashStatic;
 
   @Option(
+    name = "experimental_skip_static_outputs",
+    defaultValue = "false",
+    category = "semantics",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+    help =
+        "This flag is experimental and may go away at any time.  "
+            + "If true, linker output for mostly-static C++ executables is a tiny amount of "
+            + "dummy dependency information, and NOT a usable binary.  Kludge, but can reduce "
+            + "network and disk I/O load (and thus, continuous build cycle times) by a lot.  "
+            + "NOTE: use of this flag REQUIRES --distinct_host_configuration."
+  )
+  public boolean skipStaticOutputs;
+
+  @Option(
     name = "process_headers_in_dependencies",
     defaultValue = "false",
     category = "semantics",
@@ -313,7 +329,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to gcc."
   )
   public List<String> coptList;
@@ -324,7 +340,7 @@ public class CppOptions extends FragmentOptions {
     category = "flags",
     allowMultiple = true,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional option to pass to gcc when compiling C++ source files."
   )
   public List<String> cxxoptList;
@@ -335,7 +351,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional option to pass to gcc when compiling C source files."
   )
   public List<String> conlyoptList;
@@ -346,7 +362,7 @@ public class CppOptions extends FragmentOptions {
     category = "flags",
     allowMultiple = true,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional option to pass to gcc when linking."
   )
   public List<String> linkoptList;
@@ -357,7 +373,7 @@ public class CppOptions extends FragmentOptions {
     category = "flags",
     allowMultiple = true,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional option to pass to the LTO indexing step (under --features=thin_lto)."
   )
   public List<String> ltoindexoptList;
@@ -368,7 +384,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to strip when generating a '<name>.stripped' binary."
   )
   public List<String> stripoptList;
@@ -391,7 +407,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "true",
     category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
         "When on, use --whole-archive for cc_binary rules that have "
             + "linkshared=1 and either linkstatic=1 or '-static' in linkopts. "
@@ -556,6 +572,17 @@ public class CppOptions extends FragmentOptions {
    */
   public Label lipoContextForBuild;
 
+  @Option(
+    name = "experimental_toolchain_id_in_output_directory",
+    defaultValue = "true",
+    category = "semantics",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+    help = "Whether to embed the name of the C++ toolchain in the name of the output directory"
+  )
+  public boolean toolchainIdInOutputDirectory;
+
   /**
    * Returns the --lipo_context value if LIPO is specified and active for this configuration,
    * null otherwise.
@@ -634,7 +661,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "null",
     category = "version",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_OPTIONS},
     metadataTags = {OptionMetadataTag.EXPERIMENTAL},
     help =
         "If set, use this label instead of the default STL implementation. "
@@ -662,7 +689,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "",
     category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
         "Additional options to selectively pass to gcc when compiling certain files. "
             + "This option can be passed multiple times. "
@@ -702,7 +729,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to gcc for host tools."
   )
   public List<String> hostCoptList;
@@ -713,7 +740,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to gcc for host tools."
   )
   public List<String> hostCxxoptList;
@@ -724,7 +751,7 @@ public class CppOptions extends FragmentOptions {
     category = "version",
     converter = LibcTopLabelConverter.class,
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
         "A label to a checked-in libc library. The default value is selected by the crosstool "
             + "toolchain, and you almost never need to override it."
@@ -737,7 +764,7 @@ public class CppOptions extends FragmentOptions {
     category = "version",
     converter = LibcTopLabelConverter.class,
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
         "If specified, this setting overrides the libc top-level directory (--grte_top) "
             + "for the host configuration."
@@ -749,7 +776,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "false",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
         "If enabled, for every C++ binary linked with gold, the number of defined symbols "
             + "and the number of used symbols per input file is stored in a .sc file."
@@ -804,7 +831,7 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "false",
     category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS, OptionEffectTag.AFFECTS_OUTPUTS},
     metadataTags = {OptionMetadataTag.EXPERIMENTAL},
     help =
         "If true, use libunwind for stack unwinding, and compile with "
@@ -828,25 +855,13 @@ public class CppOptions extends FragmentOptions {
     name = "strict_system_includes",
     defaultValue = "false",
     category = "strategy",
-    documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
+    documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.EAGERNESS_TO_EXIT},
     help =
         "If true, headers found through system include paths (-isystem) are also required to be "
             + "declared."
   )
   public boolean strictSystemIncludes;
-
- @Option(
-      name = "experimental_enable_cc_configuration_make_variables",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      help = "If enabled, the C++ configuration fragment supplies Make variables. This option "
-          + "is used in the migration to remove them in favor of requiring an explicit "
-          + "dependency on the C++ toolchain for rules that use them."
-  )
-  public boolean enableMakeVariables;
 
   @Override
   public FragmentOptions getHost() {
@@ -861,7 +876,10 @@ public class CppOptions extends FragmentOptions {
       host.crosstoolTop = hostCrosstoolTop;
     }
 
-    host.enableMakeVariables = enableMakeVariables;
+    // the name of the output directory for the host configuration is forced to be "host" in
+    // BuildConfiguration.Options#getHost(), but let's be prudent here in case someone ends up
+    // removing that
+    host.toolchainIdInOutputDirectory = toolchainIdInOutputDirectory;
 
     // hostLibcTop doesn't default to the target's libcTop.
     // Only an explicit command-line option will change it.

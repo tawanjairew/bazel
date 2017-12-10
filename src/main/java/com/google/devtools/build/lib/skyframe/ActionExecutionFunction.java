@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.LegacySkyKey;
@@ -388,9 +388,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     metadataHandler.discardOutputMetadata();
 
     // This may be recreated if we discover inputs.
-    PerActionFileCache perActionFileCache =
-        new PerActionFileCache(
-            state.inputArtifactData, /*missingArtifactsAllowed=*/ action.discoversInputs());
+    PerActionFileCache perActionFileCache = new PerActionFileCache(state.inputArtifactData);
     if (action.discoversInputs()) {
       if (state.discoveredInputs == null) {
         try {
@@ -408,8 +406,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       if (env.valuesMissing()) {
         return null;
       }
-      perActionFileCache =
-          new PerActionFileCache(state.inputArtifactData, /*missingArtifactsAllowed=*/ false);
+      perActionFileCache = new PerActionFileCache(state.inputArtifactData);
 
       // Stage 1 finished, let's do stage 2. The stage 1 of input discovery will have added some
       // files with addDiscoveredInputs() and then have waited for those files to be available
@@ -425,8 +422,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         if (env.valuesMissing()) {
           return null;
         }
-        perActionFileCache =
-            new PerActionFileCache(state.inputArtifactData, /*missingArtifactsAllowed=*/ false);
+        perActionFileCache = new PerActionFileCache(state.inputArtifactData);
       }
       metadataHandler =
           new ActionMetadataHandler(state.inputArtifactData, action.getOutputs(), tsgm.get());
@@ -488,7 +484,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         @Nullable
         @Override
         public SkyKey apply(@Nullable Artifact artifact) {
-          return ArtifactSkyKey.key(artifact, /*isMandatory=*/ false);
+          return ArtifactSkyKey.key(artifact, /*mandatory=*/ false);
         }
       };
 
@@ -586,6 +582,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       throws ActionExecutionException {
     int missingCount = 0;
     int actionFailures = 0;
+    boolean catastrophe = false;
     // Only populate input data if we have the input values, otherwise they'll just go unused.
     // We still want to loop through the inputs to collect missing deps errors. During the
     // evaluator "error bubbling", we may get one last chance at reporting errors even though
@@ -636,11 +633,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         }
       } catch (ActionExecutionException e) {
         actionFailures++;
-        // Prefer a catastrophic exception as the one we propagate.
-        if (firstActionExecutionException == null
-            || !firstActionExecutionException.isCatastrophe() && e.isCatastrophe()) {
+        if (firstActionExecutionException == null) {
           firstActionExecutionException = e;
         }
+        catastrophe = catastrophe || e.isCatastrophe();
         rootCauses.addTransitive(e.getRootCauses());
       }
     }
@@ -651,12 +647,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         // having to copy the root causes to the upwards transitive closure.
         throw firstActionExecutionException;
       }
-      throw new ActionExecutionException(
-          firstActionExecutionException.getMessage(),
-          firstActionExecutionException.getCause(),
-          action,
-          rootCauses.build(),
-          firstActionExecutionException.isCatastrophe(),
+      throw new ActionExecutionException(firstActionExecutionException.getMessage(),
+          firstActionExecutionException.getCause(), action, rootCauses.build(), catastrophe,
           firstActionExecutionException.getExitCode());
     }
 

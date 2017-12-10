@@ -34,9 +34,8 @@ import java.util.List;
 public class PlatformOptions extends FragmentOptions {
 
   @Option(
-    name = "host_platform",
-    oldName = "experimental_host_platform",
-    converter = BuildConfiguration.EmptyToNullLabelConverter.class,
+    name = "experimental_host_platform",
+    converter = BuildConfiguration.LabelConverter.class,
     defaultValue = "@bazel_tools//platforms:host_platform",
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
     effectTags = {OptionEffectTag.UNKNOWN},
@@ -48,8 +47,7 @@ public class PlatformOptions extends FragmentOptions {
   // TODO(katre): Add execution platforms.
 
   @Option(
-    name = "platforms",
-    oldName = "experimental_platforms",
+    name = "experimental_platforms",
     converter = BuildConfiguration.LabelListConverter.class,
     defaultValue = "@bazel_tools//platforms:target_platform",
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -62,7 +60,7 @@ public class PlatformOptions extends FragmentOptions {
   @Option(
     name = "extra_toolchains",
     converter = LabelListConverter.class,
-    defaultValue = "",
+    defaultValue = "@bazel_tools//tools/cpp:dummy_cc_toolchain",
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
     effectTags = {OptionEffectTag.UNKNOWN},
     metadataTags = {OptionMetadataTag.HIDDEN},
@@ -96,25 +94,12 @@ public class PlatformOptions extends FragmentOptions {
   )
   public boolean toolchainResolutionDebug;
 
-  @Option(
-    name = "enabled_toolchain_types",
-    defaultValue = "",
-    converter = LabelListConverter.class,
-    category = "semantics",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-    help = "Signals that the given rule categories use platform-based toolchain resolution"
-  )
-  public List<Label> enabledToolchainTypes;
-
   @Override
   public PlatformOptions getHost() {
     PlatformOptions host = (PlatformOptions) getDefault();
-    host.platforms =
-        this.hostPlatform == null ? ImmutableList.of() : ImmutableList.of(this.hostPlatform);
+    host.platforms = ImmutableList.of(this.hostPlatform);
     host.hostPlatform = this.hostPlatform;
     host.extraToolchains = this.extraToolchains;
-    host.enabledToolchainTypes = this.enabledToolchainTypes;
     return host;
   }
 

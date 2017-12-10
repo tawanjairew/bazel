@@ -13,12 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
@@ -29,6 +27,7 @@ import com.google.devtools.build.lib.analysis.actions.ActionTemplate;
 import com.google.devtools.build.lib.analysis.actions.ActionTemplate.ActionTemplateExpansionException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue.ActionTemplateExpansionKey;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -44,12 +43,9 @@ import javax.annotation.Nullable;
  * input TreeArtifact.
  */
 public class ActionTemplateExpansionFunction implements SkyFunction {
-  private final ActionKeyContext actionKeyContext;
   private final Supplier<Boolean> removeActionsAfterEvaluation;
 
-  ActionTemplateExpansionFunction(
-      ActionKeyContext actionKeyContext, Supplier<Boolean> removeActionsAfterEvaluation) {
-    this.actionKeyContext = actionKeyContext;
+  ActionTemplateExpansionFunction(Supplier<Boolean> removeActionsAfterEvaluation) {
     this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
   }
 
@@ -87,8 +83,7 @@ public class ActionTemplateExpansionFunction implements SkyFunction {
       throw new ActionTemplateExpansionFunctionException(e);
     }
 
-    return new ActionTemplateExpansionValue(
-        actionKeyContext, expandedActions, removeActionsAfterEvaluation.get());
+    return new ActionTemplateExpansionValue(expandedActions, removeActionsAfterEvaluation.get());
   }
 
   /** Exception thrown by {@link ActionTemplateExpansionFunction}. */
@@ -109,7 +104,7 @@ public class ActionTemplateExpansionFunction implements SkyFunction {
   private void checkActionAndArtifactConflicts(Iterable<Action> actions)
       throws ActionConflictException, ArtifactPrefixConflictException {
     GeneratingActions generatingActions =
-        Actions.findAndThrowActionConflict(actionKeyContext, ImmutableList.copyOf(actions));
+        Actions.findAndThrowActionConflict(ImmutableList.<ActionAnalysisMetadata>copyOf(actions));
     Map<ActionAnalysisMetadata, ArtifactPrefixConflictException> artifactPrefixConflictMap =
         Actions.findArtifactPrefixConflicts(
             ActionLookupValue.getMapForConsistencyCheck(

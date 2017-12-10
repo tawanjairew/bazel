@@ -13,11 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.extra;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -27,6 +25,7 @@ import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.ProtoDeterministicWriter;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 
 /**
@@ -51,20 +50,18 @@ public final class ExtraActionInfoFileWriteAction extends AbstractFileWriteActio
   public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx)
       throws IOException, InterruptedException, ExecException {
     try {
-      return new ProtoDeterministicWriter(
-          shadowedAction.getExtraActionInfo(ctx.getActionKeyContext()).build());
+      return new ProtoDeterministicWriter(shadowedAction.getExtraActionInfo().build());
     } catch (CommandLineExpansionException e) {
       throw new UserExecException(e);
     }
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException {
+  protected String computeKey() throws CommandLineExpansionException {
     Fingerprint f = new Fingerprint();
     f.addString(UUID);
-    f.addString(shadowedAction.getKey(actionKeyContext));
-    f.addBytes(shadowedAction.getExtraActionInfo(actionKeyContext).build().toByteArray());
+    f.addString(shadowedAction.getKey());
+    f.addBytes(shadowedAction.getExtraActionInfo().build().toByteArray());
     return f.hexDigestAndReset();
   }
 }

@@ -11,6 +11,7 @@ java_library(
     name = "concurrent",
     srcs = glob(["*.java"]),
     deps = [
+        "//src/main/java/com/google/devtools/build/lib:preconditions",
         "//third_party:guava",
         "//third_party:jsr305",
     ],

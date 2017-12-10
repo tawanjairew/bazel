@@ -14,19 +14,17 @@
 
 package com.google.devtools.build.lib.shell;
 
-import com.google.auto.value.AutoValue;
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.io.ByteArrayOutputStream;
-import java.time.Duration;
-import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Encapsulates the results of a command execution, including exit status and output to stdout and
- * stderr.
+ * Encapsulates the results of a command execution, including exit status
+ * and output to stdout and stderr.
  */
-@AutoValue
-public abstract class CommandResult {
+public final class CommandResult {
 
   private static final Logger logger =
       Logger.getLogger("com.google.devtools.build.lib.shell.Command");
@@ -51,119 +49,57 @@ public abstract class CommandResult {
       }
   };
 
-  /** Returns the stdout {@link ByteArrayOutputStream}. */
-  public abstract ByteArrayOutputStream getStdoutStream();
+  private final ByteArrayOutputStream stdout;
+  private final ByteArrayOutputStream stderr;
+  private final TerminationStatus terminationStatus;
 
-  /** Returns the stderr {@link ByteArrayOutputStream}. */
-  public abstract ByteArrayOutputStream getStderrStream();
+  CommandResult(final ByteArrayOutputStream stdout,
+                final ByteArrayOutputStream stderr,
+                final TerminationStatus terminationStatus) {
+    checkNotNull(stdout);
+    checkNotNull(stderr);
+    checkNotNull(terminationStatus);
+    this.stdout = stdout;
+    this.stderr = stderr;
+    this.terminationStatus = terminationStatus;
+  }
 
   /**
-   * Returns the stdout as a byte array.
-   *
-   * @return raw bytes that were written to stdout by the command, or null if caller did chose to
-   *     ignore output
+   * @return raw bytes that were written to stdout by the command, or
+   *  null if caller did chose to ignore output
    * @throws IllegalStateException if output was not collected
    */
   public byte[] getStdout() {
-    return getStdoutStream().toByteArray();
+    return stdout.toByteArray();
   }
 
   /**
-   * Returns the stderr as a byte array.
-   *
-   * @return raw bytes that were written to stderr by the command, or null if caller did chose to
-   *     ignore output
+   * @return raw bytes that were written to stderr by the command, or
+   *  null if caller did chose to ignore output
    * @throws IllegalStateException if output was not collected
    */
   public byte[] getStderr() {
-    return getStderrStream().toByteArray();
+    return stderr.toByteArray();
   }
 
-  /** Returns the termination status of the subprocess. */
-  public abstract TerminationStatus getTerminationStatus();
-
   /**
-   * Returns the wall execution time.
-   *
-   * @return the measurement, or empty in case of execution errors or when the measurement is not
-   *     implemented for the current platform
+   * @return the termination status of the subprocess.
    */
-  public abstract Optional<Duration> getWallExecutionTime();
-
-  /**
-   * Returns the user execution time.
-   *
-   * @return the measurement, or empty in case of execution errors or when the measurement is not
-   *     implemented for the current platform
-   */
-  public abstract Optional<Duration> getUserExecutionTime();
-
-  /**
-   * Returns the system execution time.
-   *
-   * @return the measurement, or empty in case of execution errors or when the measurement is not
-   *     implemented for the current platform
-   */
-  public abstract Optional<Duration> getSystemExecutionTime();
+  public TerminationStatus getTerminationStatus() {
+    return terminationStatus;
+  }
 
   void logThis() {
     if (!logger.isLoggable(Level.FINER)) {
       return;
     }
-    logger.finer(getTerminationStatus().toString());
+    logger.finer(terminationStatus.toString());
 
-    if (getStdoutStream() == NO_OUTPUT_COLLECTED) {
+    if (stdout == NO_OUTPUT_COLLECTED) {
       return;
     }
-    logger.finer("Stdout: " + LogUtil.toTruncatedString(getStdout()));
-    logger.finer("Stderr: " + LogUtil.toTruncatedString(getStderr()));
+    logger.finer("Stdout: " + LogUtil.toTruncatedString(stdout.toByteArray()));
+    logger.finer("Stderr: " + LogUtil.toTruncatedString(stderr.toByteArray()));
   }
 
-  /** Returns a new {@link CommandResult.Builder}. */
-  public static Builder builder() {
-    return new AutoValue_CommandResult.Builder();
-  }
-
-  /** A builder for {@link CommandResult}s. */
-  @AutoValue.Builder
-  public abstract static class Builder {
-    /** Sets the stdout output for the command. */
-    public abstract Builder setStdoutStream(ByteArrayOutputStream stdout);
-
-    /** Sets the stderr output for the command. */
-    public abstract Builder setStderrStream(ByteArrayOutputStream stderr);
-
-    /** Sets the termination status for the command. */
-    public abstract Builder setTerminationStatus(TerminationStatus terminationStatus);
-
-    /** Sets the wall execution time. */
-    public Builder setWallExecutionTime(Duration wallExecutionTime) {
-      setWallExecutionTime(Optional.of(wallExecutionTime));
-      return this;
-    }
-
-    /** Sets the user execution time. */
-    public Builder setUserExecutionTime(Duration userExecutionTime) {
-      setUserExecutionTime(Optional.of(userExecutionTime));
-      return this;
-    }
-
-    /** Sets the system execution time. */
-    public Builder setSystemExecutionTime(Duration systemExecutionTime) {
-      setSystemExecutionTime(Optional.of(systemExecutionTime));
-      return this;
-    }
-
-    /** Sets or clears the wall execution time. */
-    public abstract Builder setWallExecutionTime(Optional<Duration> wallExecutionTime);
-
-    /** Sets or clears the user execution time. */
-    public abstract Builder setUserExecutionTime(Optional<Duration> userExecutionTime);
-
-    /** Sets or clears the system execution time. */
-    public abstract Builder setSystemExecutionTime(Optional<Duration> systemExecutionTime);
-
-    /** Builds a {@link CommandResult} object. */
-    public abstract CommandResult build();
-  }
 }

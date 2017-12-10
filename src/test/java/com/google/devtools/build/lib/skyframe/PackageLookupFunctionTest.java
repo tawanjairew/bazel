@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.NullEventHandler;
-import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
@@ -40,9 +39,9 @@ import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
+import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.ErrorReason;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.IncorrectRepositoryReferencePackageLookupValue;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -53,14 +52,11 @@ import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
-import com.google.devtools.build.skyframe.SequencedRecordingDifferencer;
 import com.google.devtools.build.skyframe.SequentialBuildDriver;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,8 +65,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
 /** Tests for {@link PackageLookupFunction}. */
 public abstract class PackageLookupFunctionTest extends FoundationTestCase {
@@ -79,8 +73,6 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
   private SequentialBuildDriver driver;
   private RecordingDifferencer differencer;
   private Path emptyPackagePath;
-  private static final String ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING =
-      "config/blacklisted.txt";
 
   protected abstract CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy();
 
@@ -90,12 +82,8 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
     scratch.file("parentpackage/BUILD");
 
     AnalysisMock analysisMock = AnalysisMock.get();
-    AtomicReference<PathPackageLocator> pkgLocator =
-        new AtomicReference<>(
-            new PathPackageLocator(
-                outputBase,
-                ImmutableList.of(emptyPackagePath, rootDirectory),
-                BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
+    AtomicReference<PathPackageLocator> pkgLocator = new AtomicReference<>(
+        new PathPackageLocator(outputBase, ImmutableList.of(emptyPackagePath, rootDirectory)));
     deletedPackages = new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     BlazeDirectories directories =
         new BlazeDirectories(
@@ -111,7 +99,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
         new PackageLookupFunction(
             deletedPackages,
             crossRepositoryLabelViolationStrategy(),
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
+            ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD)));
     skyFunctions.put(
         SkyFunctions.PACKAGE,
         new PackageFunction(null, null, null, null, null, null, null));
@@ -123,9 +111,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
         SkyFunctions.DIRECTORY_LISTING_STATE,
         new DirectoryListingStateFunction(externalFilesHelper));
     skyFunctions.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
-        new BlacklistedPackagePrefixesFunction(
-            /*hardcodedBlacklistedPackagePrefixes=*/ ImmutableSet.of(),
-            PathFragment.create(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING)));
+        new BlacklistedPackagePrefixesFunction());
     RuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
     skyFunctions.put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider));
     skyFunctions.put(
@@ -133,11 +119,13 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
         new WorkspaceFileFunction(
             ruleClassProvider,
             analysisMock
-                .getPackageFactoryBuilderForTesting(directories)
+                .getPackageFactoryBuilderForTesting()
                 .setEnvironmentExtensions(
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))
-                .build(ruleClassProvider, scratch.getFileSystem()),
+                .build(
+                    ruleClassProvider,
+                    scratch.getFileSystem()),
             directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     skyFunctions.put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
@@ -149,16 +137,17 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
             LocalRepositoryRule.NAME, (RepositoryFunction) new LocalRepositoryFunction());
     skyFunctions.put(
         SkyFunctions.REPOSITORY_DIRECTORY,
-        new RepositoryDelegatorFunction(
-            repositoryHandlers, null, new AtomicBoolean(true), ImmutableMap::of, directories));
+        new RepositoryDelegatorFunction(repositoryHandlers, null, new AtomicBoolean(true)));
     skyFunctions.put(SkyFunctions.REPOSITORY, new RepositoryLoaderFunction());
 
-    differencer = new SequencedRecordingDifferencer();
+    differencer = new RecordingDifferencer();
     evaluator = new InMemoryMemoizingEvaluator(skyFunctions, differencer);
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
-    PrecomputedValue.SKYLARK_SEMANTICS.set(differencer, SkylarkSemantics.DEFAULT_SEMANTICS);
+    PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(
+        differencer, PathFragment.EMPTY_FRAGMENT);
+    PrecomputedValue.BLAZE_DIRECTORIES.set(differencer, directories);
     RepositoryDelegatorFunction.REPOSITORY_OVERRIDES.set(
         differencer, ImmutableMap.<RepositoryName, PathFragment>of());
   }
@@ -211,12 +200,14 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
     assertThat(packageLookupValue.getErrorMsg()).isNotNull();
   }
 
+
   @Test
   public void testBlacklistedPackage() throws Exception {
     scratch.file("blacklisted/subdir/BUILD");
     scratch.file("blacklisted/BUILD");
-    Path blacklist = scratch.overwriteFile(
-        ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING, "blacklisted");
+    PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(differencer,
+        PathFragment.create("config/blacklisted.txt"));
+    Path blacklist = scratch.file("config/blacklisted.txt", "blacklisted");
 
     ImmutableSet<String> pkgs = ImmutableSet.of("blacklisted/subdir", "blacklisted");
     for (String pkg : pkgs) {
@@ -226,8 +217,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
       assertThat(packageLookupValue.getErrorMsg()).isNotNull();
     }
 
-    scratch.overwriteFile(
-        ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING, "not_blacklisted");
+    scratch.overwriteFile("config/blacklisted.txt", "not_blacklisted");
     RootedPath rootedBlacklist = RootedPath.toRootedPath(
         blacklist.getParentDirectory().getParentDirectory(),
         PathFragment.create("config/blacklisted.txt"));
@@ -395,6 +385,52 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
       createAndCheckInvalidPackageLabel(false);
     }
 
+    private String getCorrectedPackage(String repository, String directory) throws Exception {
+      scratch.overwriteFile(
+          "WORKSPACE", "local_repository(name='local', path='" + repository + "')");
+      scratch.file(repository + "/WORKSPACE");
+      scratch.file(directory + "/BUILD");
+
+      PackageLookupValue packageLookupValue =
+          lookupPackage(PackageIdentifier.createInMainRepo(directory));
+      assertThat(packageLookupValue.packageExists()).isFalse();
+      assertThat(packageLookupValue)
+          .isInstanceOf(IncorrectRepositoryReferencePackageLookupValue.class);
+
+      IncorrectRepositoryReferencePackageLookupValue incorrectPackageLookupValue =
+          (IncorrectRepositoryReferencePackageLookupValue) packageLookupValue;
+      assertThat(incorrectPackageLookupValue.getInvalidPackageIdentifier())
+          .isEqualTo(PackageIdentifier.createInMainRepo(directory));
+      return incorrectPackageLookupValue.getCorrectedPackageIdentifier().toString();
+    }
+
+    @Test
+    public void testCorrectPackageDetection_simpleRepo_emptyPackage() throws Exception {
+      assertThat(getCorrectedPackage("local", "local")).isEqualTo("@local//");
+    }
+
+    @Test
+    public void testCorrectPackageDetection_simpleRepo_singlePackage() throws Exception {
+      assertThat(getCorrectedPackage("local", "local/package")).isEqualTo("@local//package");
+    }
+
+    @Test
+    public void testCorrectPackageDetection_simpleRepo_subPackage() throws Exception {
+      assertThat(getCorrectedPackage("local", "local/package/subpackage"))
+          .isEqualTo("@local//package/subpackage");
+    }
+
+    @Test
+    public void testCorrectPackageDetection_deepRepo_emptyPackage() throws Exception {
+      assertThat(getCorrectedPackage("local/repo", "local/repo")).isEqualTo("@local//");
+    }
+
+    @Test
+    public void testCorrectPackageDetection_deepRepo_subPackage() throws Exception {
+      assertThat(getCorrectedPackage("local/repo", "local/repo/package"))
+          .isEqualTo("@local//package");
+    }
+
     @Test
     public void testSymlinkCycleInWorkspace() throws Exception {
       scratch.overwriteFile("WORKSPACE", "local_repository(name='local', path='local/repo')");
@@ -418,111 +454,6 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
           .hasMessage(
               "no such package 'local/repo': Unable to determine the local repository for "
                   + "directory /workspace/local/repo");
-    }
-  }
-
-  /** Tests for detection of invalid package identifiers for local repositories. */
-  @RunWith(Parameterized.class)
-  public static class CorrectedLocalRepositoryTest extends PackageLookupFunctionTest {
-
-    /**
-     * Create parameters for this test. The contents are:
-     *
-     * <ol>
-     *   <li>description
-     *   <li>repository path
-     *   <li>package path - under the repository
-     *   <li>expected corrected package identifier
-     * </ol>
-     */
-    @Parameters(name = "{0}")
-    public static List<Object[]> parameters() {
-      List<Object[]> params = new ArrayList<>();
-
-      params.add(new String[] {"simpleRepo_emptyPackage", "local", "", "@local//"});
-      params.add(new String[] {"simpleRepo_singlePackage", "local", "package", "@local//package"});
-      params.add(
-          new String[] {
-            "simpleRepo_subPackage", "local", "package/subpackage", "@local//package/subpackage"
-          });
-      params.add(new String[] {"deepRepo_emptyPackage", "local/repo", "", "@local//"});
-      params.add(new String[] {"deepRepo_subPackage", "local/repo", "package", "@local//package"});
-
-      return params;
-    }
-
-    private final String repositoryPath;
-    private final String packagePath;
-    private final String expectedCorrectedPackageIdentifier;
-
-    public CorrectedLocalRepositoryTest(
-        String unusedDescription,
-        String repositoryPath,
-        String packagePath,
-        String expectedCorrectedPackageIdentifier) {
-      this.repositoryPath = repositoryPath;
-      this.packagePath = packagePath;
-      this.expectedCorrectedPackageIdentifier = expectedCorrectedPackageIdentifier;
-    }
-
-    @Override
-    protected CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy() {
-      return CrossRepositoryLabelViolationStrategy.ERROR;
-    }
-
-    @Test
-    public void testCorrectPackageDetection_relativePath() throws Exception {
-      scratch.overwriteFile(
-          "WORKSPACE", "local_repository(name='local', path='" + repositoryPath + "')");
-      scratch.file(PathFragment.create(repositoryPath).getRelative("WORKSPACE").getPathString());
-      scratch.file(
-          PathFragment.create(repositoryPath)
-              .getRelative(packagePath)
-              .getRelative("BUILD")
-              .getPathString());
-
-      PackageIdentifier packageIdentifier =
-          PackageIdentifier.createInMainRepo(
-              PathFragment.create(repositoryPath).getRelative(packagePath));
-      PackageLookupValue packageLookupValue = lookupPackage(packageIdentifier);
-      assertThat(packageLookupValue.packageExists()).isFalse();
-      assertThat(packageLookupValue)
-          .isInstanceOf(IncorrectRepositoryReferencePackageLookupValue.class);
-
-      IncorrectRepositoryReferencePackageLookupValue incorrectPackageLookupValue =
-          (IncorrectRepositoryReferencePackageLookupValue) packageLookupValue;
-      assertThat(incorrectPackageLookupValue.getInvalidPackageIdentifier())
-          .isEqualTo(packageIdentifier);
-      assertThat(incorrectPackageLookupValue.getCorrectedPackageIdentifier().toString())
-          .isEqualTo(expectedCorrectedPackageIdentifier);
-    }
-
-    @Test
-    public void testCorrectPackageDetection_absolutePath() throws Exception {
-      scratch.overwriteFile(
-          "WORKSPACE",
-          "local_repository(name='local', path=__workspace_dir__ + '/" + repositoryPath + "')");
-      scratch.file(PathFragment.create(repositoryPath).getRelative("WORKSPACE").getPathString());
-      scratch.file(
-          PathFragment.create(repositoryPath)
-              .getRelative(packagePath)
-              .getRelative("BUILD")
-              .getPathString());
-
-      PackageIdentifier packageIdentifier =
-          PackageIdentifier.createInMainRepo(
-              PathFragment.create(repositoryPath).getRelative(packagePath));
-      PackageLookupValue packageLookupValue = lookupPackage(packageIdentifier);
-      assertThat(packageLookupValue.packageExists()).isFalse();
-      assertThat(packageLookupValue)
-          .isInstanceOf(IncorrectRepositoryReferencePackageLookupValue.class);
-
-      IncorrectRepositoryReferencePackageLookupValue incorrectPackageLookupValue =
-          (IncorrectRepositoryReferencePackageLookupValue) packageLookupValue;
-      assertThat(incorrectPackageLookupValue.getInvalidPackageIdentifier())
-          .isEqualTo(packageIdentifier);
-      assertThat(incorrectPackageLookupValue.getCorrectedPackageIdentifier().toString())
-          .isEqualTo(expectedCorrectedPackageIdentifier);
     }
   }
 }

@@ -14,16 +14,11 @@
 
 package com.google.devtools.build.lib.analysis.platform;
 
-import static com.google.common.collect.ImmutableListMultimap.flatteningToImmutableListMultimap;
-import static com.google.common.collect.ImmutableListMultimap.toImmutableListMultimap;
-import static java.util.stream.Collectors.joining;
-
-import com.google.common.base.Functions;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Streams;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
@@ -37,7 +32,7 @@ import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -97,12 +92,12 @@ public class PlatformInfo extends NativeInfo {
 
   private final Label label;
   private final ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints;
-  private final String remoteExecutionProperties;
+  private final ImmutableMap<String, String> remoteExecutionProperties;
 
   private PlatformInfo(
       Label label,
       ImmutableList<ConstraintValueInfo> constraints,
-      String remoteExecutionProperties,
+      ImmutableMap<String, String> remoteExecutionProperties,
       Location location) {
     super(
         SKYLARK_CONSTRUCTOR,
@@ -156,7 +151,7 @@ public class PlatformInfo extends NativeInfo {
     doc = "Properties that are available for the use of remote execution.",
     structField = true
   )
-  public String remoteExecutionProperties() {
+  public ImmutableMap<String, String> remoteExecutionProperties() {
     return remoteExecutionProperties;
   }
 
@@ -169,7 +164,7 @@ public class PlatformInfo extends NativeInfo {
   public static class Builder {
     private Label label;
     private final List<ConstraintValueInfo> constraints = new ArrayList<>();
-    private String remoteExecutionProperties;
+    private final Map<String, String> remoteExecutionProperties = new HashMap<>();
     private Location location = Location.BUILTIN;
 
     /**
@@ -209,13 +204,29 @@ public class PlatformInfo extends NativeInfo {
     }
 
     /**
-     * Sets the data being sent to a potential remote executor.
+     * Adds the given key/value pair to the data being sent to a potential remote executor. If the
+     * key already exists in the map, the previous value will be overwritten.
+     *
+     * @param key the key to be used
+     * @param value the value to be used
+     * @return the {@link Builder} instance for method chaining
+     */
+    public Builder addRemoteExecutionProperty(String key, String value) {
+      this.remoteExecutionProperties.put(key, value);
+      return this;
+    }
+
+    /**
+     * Adds the given properties to the data being sent to a potential remote executor. If any key
+     * already exists in the map, the previous value will be overwritten.
      *
      * @param properties the properties to be added
      * @return the {@link Builder} instance for method chaining
      */
-    public Builder setRemoteExecutionProperties(String properties) {
-      this.remoteExecutionProperties = properties;
+    public Builder addRemoteExecutionProperties(Map<String, String> properties) {
+      for (Map.Entry<String, String> entry : properties.entrySet()) {
+        this.addRemoteExecutionProperty(entry.getKey(), entry.getValue());
+      }
       return this;
     }
 
@@ -238,31 +249,27 @@ public class PlatformInfo extends NativeInfo {
      */
     public PlatformInfo build() throws DuplicateConstraintException {
       ImmutableList<ConstraintValueInfo> validatedConstraints = validateConstraints(constraints);
-      return new PlatformInfo(label, validatedConstraints, remoteExecutionProperties, location);
+      return new PlatformInfo(
+          label, validatedConstraints, ImmutableMap.copyOf(remoteExecutionProperties), location);
     }
 
-    public static ImmutableList<ConstraintValueInfo> validateConstraints(
+    private ImmutableList<ConstraintValueInfo> validateConstraints(
         Iterable<ConstraintValueInfo> constraintValues) throws DuplicateConstraintException {
+      Multimap<ConstraintSettingInfo, ConstraintValueInfo> constraints = ArrayListMultimap.create();
 
-      // Collect the constraints by the settings.
-      ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo> constraints =
-          Streams.stream(constraintValues)
-              .collect(
-                  toImmutableListMultimap(ConstraintValueInfo::constraint, Functions.identity()));
-
-      // Find settings with duplicate values.
-      ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicates =
-          constraints
-              .asMap()
-              .entrySet()
-              .stream()
-              .filter(e -> e.getValue().size() > 1)
-              .collect(
-                  flatteningToImmutableListMultimap(Map.Entry::getKey, e -> e.getValue().stream()));
-
-      if (!duplicates.isEmpty()) {
-        throw new DuplicateConstraintException(duplicates);
+      for (ConstraintValueInfo constraintValue : constraintValues) {
+        constraints.put(constraintValue.constraint(), constraintValue);
       }
+
+      // Are there any settings with more than one value?
+      for (ConstraintSettingInfo constraintSetting : constraints.keySet()) {
+        if (constraints.get(constraintSetting).size() > 1) {
+          // Only reports the first case of this error.
+          throw new DuplicateConstraintException(
+              constraintSetting, constraints.get(constraintSetting));
+        }
+      }
+
       return ImmutableList.copyOf(constraints.values());
     }
   }
@@ -272,43 +279,32 @@ public class PlatformInfo extends NativeInfo {
    * ConstraintSettingInfo} is added to a {@link Builder}.
    */
   public static class DuplicateConstraintException extends Exception {
-    private final ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo>
-        duplicateConstraints;
+    private final ImmutableSet<ConstraintValueInfo> duplicateConstraints;
 
     public DuplicateConstraintException(
-        ListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicateConstraints) {
-      super(formatError(duplicateConstraints));
-      this.duplicateConstraints = ImmutableListMultimap.copyOf(duplicateConstraints);
+        ConstraintSettingInfo constraintSetting,
+        Iterable<ConstraintValueInfo> duplicateConstraintValues) {
+      super(formatError(constraintSetting, duplicateConstraintValues));
+      this.duplicateConstraints = ImmutableSet.copyOf(duplicateConstraintValues);
     }
 
-    public ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo>
-        duplicateConstraints() {
+    public ImmutableSet<ConstraintValueInfo> duplicateConstraints() {
       return duplicateConstraints;
     }
 
-    public static String formatError(
-        ListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicateConstraints) {
+    private static String formatError(
+        ConstraintSettingInfo constraintSetting,
+        Iterable<ConstraintValueInfo> duplicateConstraints) {
+      StringBuilder constraintValuesDescription = new StringBuilder();
+      for (ConstraintValueInfo constraintValue : duplicateConstraints) {
+        if (constraintValuesDescription.length() > 0) {
+          constraintValuesDescription.append(", ");
+        }
+        constraintValuesDescription.append(constraintValue.label());
+      }
       return String.format(
-          "Duplicate constraint_values detected: %s",
-          duplicateConstraints
-              .asMap()
-              .entrySet()
-              .stream()
-              .map(e -> describeSingleDuplicateConstraintSetting(e))
-              .collect(joining(", ")));
-    }
-
-    private static String describeSingleDuplicateConstraintSetting(
-        Map.Entry<ConstraintSettingInfo, Collection<ConstraintValueInfo>> duplicate) {
-      return String.format(
-          "constraint_setting %s has [%s]",
-          duplicate.getKey().label(),
-          duplicate
-              .getValue()
-              .stream()
-              .map(ConstraintValueInfo::label)
-              .map(Label::toString)
-              .collect(joining(", ")));
+          "Duplicate constraint_values for constraint_setting %s: %s",
+          constraintSetting.label(), constraintValuesDescription.toString());
     }
   }
 }

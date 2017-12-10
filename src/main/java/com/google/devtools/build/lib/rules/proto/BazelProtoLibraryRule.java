@@ -22,8 +22,11 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.AttributeMap;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.util.FileType;
@@ -33,16 +36,15 @@ import com.google.devtools.build.lib.util.FileType;
  */
 public final class BazelProtoLibraryRule implements RuleDefinition {
 
-  private static final Label DEFAULT_PROTO_COMPILER =
-      Label.parseAbsoluteUnchecked("@com_google_protobuf//:protoc");
-  private static final Attribute.LateBoundDefault<?, Label> PROTO_COMPILER =
-      Attribute.LateBoundDefault.fromTargetConfiguration(
-          ProtoConfiguration.class,
-          DEFAULT_PROTO_COMPILER,
-          (rule, attributes, protoConfig) ->
-              protoConfig.protoCompiler() != null
-                  ? protoConfig.protoCompiler()
-                  : DEFAULT_PROTO_COMPILER);
+  private static final Attribute.LateBoundLabel<BuildConfiguration> PROTO_COMPILER =
+      new Attribute.LateBoundLabel<BuildConfiguration>(
+          "@com_google_protobuf//:protoc", ProtoConfiguration.class) {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+          Label label = configuration.getFragment(ProtoConfiguration.class).protoCompiler();
+          return label != null ? label : getDefault();
+        }
+      };
 
   @Override
   public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {

@@ -39,7 +39,7 @@ See 'FLAGS VALIDATORS' in the flags module's docstring for a usage manual.
 __author__ = 'olexiy@google.com (Olexiy Oryeshko)'
 
 
-from gflags import exceptions
+import exceptions
 
 
 # TODO(yileiyang): Remove this.

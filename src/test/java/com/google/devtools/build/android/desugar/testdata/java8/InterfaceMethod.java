@@ -15,7 +15,6 @@ package com.google.devtools.build.android.desugar.testdata.java8;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Desugar test input interface that declares lambdas and method references in default and static
@@ -24,10 +23,6 @@ import java.util.stream.Stream;
 public interface InterfaceMethod {
   public default List<String> defaultMethodReference(List<String> names) {
     return names.stream().filter(this::startsWithS).collect(Collectors.toList());
-  }
-
-  public default String defaultInvokingBootclasspathMethods(String expectedValue) {
-    return Stream.of(expectedValue).findFirst().orElse("unexpected");
   }
 
   public default List<String> staticMethodReference(List<String> names) {

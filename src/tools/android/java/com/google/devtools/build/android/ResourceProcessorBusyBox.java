@@ -14,19 +14,13 @@
 
 package com.google.devtools.build.android;
 
-import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
-import com.google.devtools.build.android.aapt2.Aapt2Exception;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
-import java.io.IOException;
 import java.nio.file.FileSystems;
-import java.util.Arrays;
-import java.util.logging.Logger;
 
 /**
  * Provides an entry point for the resource processing stages.
@@ -97,12 +91,6 @@ public class ResourceProcessorBusyBox {
         AndroidResourceMergingAction.main(args);
       }
     },
-    MERGE_COMPILED() {
-      @Override
-      void call(String[] args) throws Exception {
-        AndroidCompiledResourceMergingAction.main(args);
-      }
-    },
     GENERATE_AAR() {
       @Override
       void call(String[] args) throws Exception {
@@ -138,18 +126,10 @@ public class ResourceProcessorBusyBox {
       void call(String[] args) throws Exception {
         Aapt2ResourcePackagingAction.main(args);
       }
-    },
-    SHRINK_AAPT2() {
-      @Override
-      void call(String[] args) throws Exception {
-        Aapt2ResourceShrinkingAction.main(args);
-      }
     };
 
     abstract void call(String[] args) throws Exception;
   }
-
-  private static final Logger logger = Logger.getLogger(ResourceProcessorBusyBox.class.getName());
 
   /** Converter for the Tool enum. */
   public static final class ToolConverter extends EnumConverter<Tool> {
@@ -172,7 +152,7 @@ public class ResourceProcessorBusyBox {
           "The processing tool to execute. "
               + "Valid tools: PACKAGE, VALIDATE, GENERATE_BINARY_R, GENERATE_LIBRARY_R, PARSE, "
               + "MERGE, GENERATE_AAR, SHRINK, MERGE_MANIFEST, COMPILE_LIBRARY_RESOURCES, "
-              + "LINK_STATIC_LIBRARY, AAPT2_PACKAGE, SHRINK_AAPT2, MERGE_COMPILED."
+              + "LINK_STATIC_LIBRARY, AAPT2_PACKAGE."
     )
     public Tool tool;
   }
@@ -180,22 +160,9 @@ public class ResourceProcessorBusyBox {
   public static void main(String[] args) throws Exception {
     OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
     optionsParser.setAllowResidue(true);
-    optionsParser.enableParamsFileSupport(
-        new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()));
+    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
     optionsParser.parse(args);
     Options options = optionsParser.getOptions(Options.class);
-    try {
-      options.tool.call(optionsParser.getResidue().toArray(new String[0]));
-    } catch (MergingException | IOException e) {
-      logger.severe(e.getMessage());
-      logSuppressedAndExit(e);
-    } catch (Aapt2Exception e) {
-      logSuppressedAndExit(e);
-    }
-  }
-
-  private static void logSuppressedAndExit(Throwable e) {
-    Arrays.stream(e.getSuppressed()).map(Throwable::getMessage).forEach(logger::severe);
-    System.exit(1);
+    options.tool.call(optionsParser.getResidue().toArray(new String[0]));
   }
 }

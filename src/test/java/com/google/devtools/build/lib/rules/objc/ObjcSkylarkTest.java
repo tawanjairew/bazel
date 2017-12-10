@@ -20,14 +20,13 @@ import static com.google.devtools.build.lib.rules.objc.BundleableFile.BUNDLE_PAT
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.ObjectArrays;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.packages.SkylarkInfo;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -41,6 +40,13 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class ObjcSkylarkTest extends ObjcRuleTestCase {
+
+  @Override
+  protected void useConfiguration(String... args) throws Exception {
+    // Do not test crosstool for skylark tests.
+    useConfiguration(ObjcCrosstoolMode.OFF, args);
+  }
+
   @Test
   public void testSkylarkRuleCanDependOnNativeAppleRule() throws Exception {
     scratch.file("examples/rule/BUILD");
@@ -60,7 +66,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
+        "load('/examples/rule/apple_rules', 'my_rule')",
         "my_rule(",
         "    name = 'my_target',",
         "    deps = [':lib'],",
@@ -100,7 +106,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
+        "load('/examples/rule/apple_rules', 'my_rule')",
         "my_rule(",
         "    name = 'my_target',",
         "    deps = [':lib'],",
@@ -147,7 +153,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
+        "load('/examples/rule/apple_rules', 'my_rule')",
         "my_rule(",
         "    name = 'my_target',",
         "    deps = [':cc_lib', ':objc_lib'],",
@@ -187,7 +193,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'swift_library')",
+        "load('/examples/rule/apple_rules', 'swift_library')",
         "swift_library(",
         "   name='my_target',",
         "   deps=[':lib'],",
@@ -197,16 +203,13 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "   srcs = ['a.m'],",
         "   defines = ['mock_define']",
         ")",
-        "apple_binary(",
+        "objc_binary(",
         "   name = 'bin',",
-        "   platform_type = 'ios',",
         "   deps = [':my_target']",
         ")");
 
     ConfiguredTarget binaryTarget = getConfiguredTarget("//examples/apple_skylark:bin");
-    AppleExecutableBinaryProvider executableProvider =
-        binaryTarget.get(AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
-    ObjcProvider objcProvider = executableProvider.getDepsObjcProvider();
+    ObjcProvider objcProvider = binaryTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
 
     assertThat(Artifact.toRootRelativePaths(objcProvider.get(ObjcProvider.LIBRARY)))
         .contains("examples/apple_skylark/liblib.a");
@@ -228,7 +231,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
+        "load('/examples/rule/apple_rules', 'my_rule')",
         "my_rule(",
         "   name='my_target'",
         ")",
@@ -237,16 +240,13 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "   srcs = ['a.m'],",
         "   deps = [':my_target']",
         ")",
-        "apple_binary(",
+        "objc_binary(",
         "   name = 'bin',",
-        "   platform_type = 'ios',",
         "   deps = [':lib']",
         ")");
 
     ConfiguredTarget binaryTarget = getConfiguredTarget("//examples/apple_skylark:bin");
-    AppleExecutableBinaryProvider executableProvider =
-        binaryTarget.get(AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
-    ObjcProvider objcProvider = executableProvider.getDepsObjcProvider();
+    ObjcProvider objcProvider = binaryTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
 
     assertThat(objcProvider.get(ObjcProvider.DEFINE)).contains("mock_define");
   }
@@ -257,13 +257,11 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/rule/apple_rules.bzl",
         "def swift_binary_impl(ctx):",
-        "   xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]",
         "   cpu = ctx.fragments.apple.ios_cpu()",
         "   platform = ctx.fragments.apple.ios_cpu_platform()",
-        "   xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]",
-        "   env = apple_common.target_apple_env(xcode_config, platform)",
-        "   xcode_version = xcode_config.xcode_version()",
-        "   sdk_version = xcode_config.sdk_version_for_platform(platform)",
+        "   env = ctx.fragments.apple.target_apple_env(platform)",
+        "   xcode_version = ctx.fragments.apple.xcode_version()",
+        "   sdk_version = ctx.fragments.apple.sdk_version_for_platform(platform)",
         "   single_arch_platform = ctx.fragments.apple.single_arch_platform",
         "   single_arch_cpu = ctx.fragments.apple.single_arch_cpu",
         "   platform_type = single_arch_platform.platform_type",
@@ -279,18 +277,15 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "      bitcode_mode=str(bitcode_mode)",
         "   )",
         "swift_binary = rule(",
-        "    implementation = swift_binary_impl,",
-        "    fragments = ['apple'],",
-        "    attrs = { '_xcode_config': ",
-        "        attr.label(default=Label('//examples/apple_skylark:current_xcode_config')) },",
+        "implementation = swift_binary_impl,",
+        "fragments = ['apple']",
         ")");
 
     scratch.file("examples/apple_skylark/a.m");
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'swift_binary')",
-        "xcode_config_alias(name='current_xcode_config')",
+        "load('/examples/rule/apple_rules', 'swift_binary')",
         "swift_binary(",
         "   name='my_target',",
         ")");
@@ -334,7 +329,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "   name='my_target',",
         ")");
@@ -369,7 +364,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'swift_binary')",
+        "load('/examples/rule/apple_rules', 'swift_binary')",
         "swift_binary(",
         "   name='my_target',",
         ")");
@@ -395,20 +390,19 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/rule/apple_rules.bzl",
         "def swift_binary_impl(ctx):",
-        "   xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]",
-        "   ios_sdk_version = xcode_config.sdk_version_for_platform\\",
+        "   ios_sdk_version = ctx.fragments.apple.sdk_version_for_platform\\",
         "(apple_common.platform.ios_device)",
-        "   watchos_sdk_version = xcode_config.sdk_version_for_platform\\",
+        "   watchos_sdk_version = ctx.fragments.apple.sdk_version_for_platform\\",
         "(apple_common.platform.watchos_device)",
-        "   tvos_sdk_version = xcode_config.sdk_version_for_platform\\",
+        "   tvos_sdk_version = ctx.fragments.apple.sdk_version_for_platform\\",
         "(apple_common.platform.tvos_device)",
-        "   macos_sdk_version = xcode_config.sdk_version_for_platform\\",
+        "   macos_sdk_version = ctx.fragments.apple.sdk_version_for_platform\\",
         "(apple_common.platform.macos)",
-        "   ios_minimum_os = xcode_config.minimum_os_for_platform_type\\",
+        "   ios_minimum_os = ctx.fragments.apple.minimum_os_for_platform_type\\",
         "(apple_common.platform_type.ios)",
-        "   watchos_minimum_os = xcode_config.minimum_os_for_platform_type\\",
+        "   watchos_minimum_os = ctx.fragments.apple.minimum_os_for_platform_type\\",
         "(apple_common.platform_type.watchos)",
-        "   tvos_minimum_os = xcode_config.minimum_os_for_platform_type\\",
+        "   tvos_minimum_os = ctx.fragments.apple.minimum_os_for_platform_type\\",
         "(apple_common.platform_type.tvos)",
         "   return struct(",
         "      ios_sdk_version=str(ios_sdk_version),",
@@ -420,18 +414,15 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "      tvos_minimum_os=str(tvos_minimum_os)",
         "   )",
         "swift_binary = rule(",
-        "    implementation = swift_binary_impl,",
-        "    fragments = ['apple'],",
-        "    attrs = { '_xcode_config': ",
-        "        attr.label(default=Label('//examples/apple_skylark:current_xcode_config')) },",
+        "implementation = swift_binary_impl,",
+        "fragments = ['apple']",
         ")");
 
     scratch.file("examples/apple_skylark/a.m");
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'swift_binary')",
-        "xcode_config_alias(name='current_xcode_config')",
+        "load('/examples/rule/apple_rules', 'swift_binary')",
         "swift_binary(",
         "   name='my_target',",
         ")");
@@ -495,7 +486,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/objc_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:objc_rules.bzl', 'swift_binary')",
+        "load('/examples/rule/objc_rules', 'swift_binary')",
         "swift_binary(",
         "   name='my_target',",
         ")");
@@ -545,7 +536,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/objc_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:objc_rules.bzl', 'my_rule')",
+        "load('/examples/rule/objc_rules', 'my_rule')",
         "my_rule(",
         "   name='my_target',",
         ")");
@@ -575,7 +566,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/objc_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:objc_rules.bzl', 'test_rule')",
+        "load('/examples/rule/objc_rules', 'test_rule')",
         "test_rule(",
         "   name='my_target',",
         ")");
@@ -607,7 +598,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/objc_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:objc_rules.bzl', 'test_rule')",
+        "load('/examples/rule/objc_rules', 'test_rule')",
         "test_rule(",
         "   name='my_target',",
         ")");
@@ -641,7 +632,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/objc_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:objc_rules.bzl', 'test_rule')",
+        "load('/examples/rule/objc_rules', 'test_rule')",
         "test_rule(",
         "   name='my_target',",
         ")");
@@ -673,7 +664,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/objc_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:objc_rules.bzl', 'swift_binary')",
+        "load('/examples/rule/objc_rules', 'swift_binary')",
         "swift_binary(",
         "   name='my_target',",
         "   deps=[':lib'],",
@@ -891,7 +882,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'swift_binary')",
+        "load('/examples/rule/apple_rules', 'swift_binary')",
         "swift_binary(",
         "   name='my_target',",
         "   deps=[':lib'],",
@@ -936,7 +927,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "objc_library(",
         "    name = 'lib',",
         "    srcs = ['a.m'],",
@@ -986,7 +977,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "objc_library(",
         "    name = 'lib',",
         "    srcs = ['a.m'],",
@@ -1025,7 +1016,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "    name = 'my_target',",
         ")");
@@ -1065,7 +1056,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "    name = 'my_target',",
         ")");
@@ -1096,7 +1087,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "    name = 'my_target',",
         ")");
@@ -1132,7 +1123,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "    name = 'my_target',",
         ")");
@@ -1176,7 +1167,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "    name = 'my_target',",
         ")");
@@ -1203,7 +1194,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "    name = 'my_target',",
         ")");
@@ -1240,7 +1231,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
+        "load('/examples/rule/apple_rules', 'my_rule')",
         "my_rule(",
         "    name = 'my_target',",
         "    deps = [':lib'],",
@@ -1253,55 +1244,6 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
 
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
     assertThat(skylarkTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR)).isNotNull();
-  }
-
-  @Test
-  public void testMultiArchSplitTransition() throws Exception {
-    scratch.file("examples/rule/BUILD");
-    scratch.file(
-        "examples/rule/apple_rules.bzl",
-        "def my_rule_impl(ctx):",
-        "   return_kwargs = {}",
-        "   for cpu_value in ctx.split_attr.deps:",
-        "     for child_target in ctx.split_attr.deps[cpu_value]:",
-        "       return_kwargs[cpu_value] = struct(objc=child_target.objc)",
-        "   return struct(**return_kwargs)",
-        "my_rule = rule(implementation = my_rule_impl,",
-        "   attrs = {",
-        "       'deps': attr.label_list(cfg=apple_common.multi_arch_split, providers=[['objc']]),",
-        "       'platform_type': attr.string(mandatory=True),",
-        "       'minimum_os_version': attr.string(mandatory=True)},",
-        "   fragments = ['apple'],",
-        ")");
-    scratch.file("examples/apple_skylark/a.cc");
-    scratch.file(
-        "examples/apple_skylark/BUILD",
-        "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
-        "my_rule(",
-        "    name = 'my_target',",
-        "    deps = [':lib'],",
-        "    platform_type = 'ios',",
-        "    minimum_os_version='2.2'",
-        ")",
-        "objc_library(",
-        "    name = 'lib',",
-        "    srcs = ['a.m'],",
-        "    hdrs = ['a.h']",
-        ")");
-
-    useConfiguration("--ios_multi_cpus=armv7,arm64");
-    ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    ObjcProvider armv7Objc = ((SkylarkInfo) skylarkTarget.get("ios_armv7"))
-        .getValue("objc", ObjcProvider.class);
-    ObjcProvider arm64Objc = ((SkylarkInfo) skylarkTarget.get("ios_arm64"))
-        .getValue("objc", ObjcProvider.class);
-    assertThat(armv7Objc).isNotNull();
-    assertThat(arm64Objc).isNotNull();
-    assertThat(Iterables.getOnlyElement(armv7Objc.getObjcLibraries()).getExecPathString())
-        .contains("ios_armv7");
-    assertThat(Iterables.getOnlyElement(arm64Objc.getObjcLibraries()).getExecPathString())
-        .contains("ios_arm64");
   }
 
   private void checkSkylarkRunMemleaksWithExpectedValue(boolean expectedValue) throws Exception {
@@ -1318,7 +1260,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "test_rule(",
         "    name = 'my_target',",
         ")");

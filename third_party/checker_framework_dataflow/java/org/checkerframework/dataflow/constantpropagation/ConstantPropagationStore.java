@@ -3,15 +3,16 @@ package org.checkerframework.dataflow.constantpropagation;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+
 import org.checkerframework.dataflow.analysis.FlowExpressions;
 import org.checkerframework.dataflow.analysis.Store;
-import org.checkerframework.dataflow.cfg.CFGVisualizer;
 import org.checkerframework.dataflow.cfg.node.IntegerLiteralNode;
 import org.checkerframework.dataflow.cfg.node.LocalVariableNode;
 import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.dataflow.constantpropagation.Constant.Type;
 
-public class ConstantPropagationStore implements Store<ConstantPropagationStore> {
+public class ConstantPropagationStore implements
+        Store<ConstantPropagationStore> {
 
     /** Information about variables gathered so far. */
     Map<Node, Constant> contents;
@@ -39,13 +40,15 @@ public class ConstantPropagationStore implements Store<ConstantPropagationStore>
             value = val;
         }
         // TODO: remove (only two nodes supported atm)
-        assert n instanceof IntegerLiteralNode || n instanceof LocalVariableNode;
+        assert n instanceof IntegerLiteralNode
+                || n instanceof LocalVariableNode;
         contents.put(n, value);
     }
 
     public void setInformation(Node n, Constant val) {
         // TODO: remove (only two nodes supported atm)
-        assert n instanceof IntegerLiteralNode || n instanceof LocalVariableNode;
+        assert n instanceof IntegerLiteralNode
+                || n instanceof LocalVariableNode;
         contents.put(n, val);
     }
 
@@ -55,7 +58,8 @@ public class ConstantPropagationStore implements Store<ConstantPropagationStore>
     }
 
     @Override
-    public ConstantPropagationStore leastUpperBound(ConstantPropagationStore other) {
+    public ConstantPropagationStore leastUpperBound(
+            ConstantPropagationStore other) {
         Map<Node, Constant> newContents = new HashMap<>();
 
         // go through all of the information of the other class
@@ -84,26 +88,18 @@ public class ConstantPropagationStore implements Store<ConstantPropagationStore>
     }
 
     @Override
-    public ConstantPropagationStore widenedUpperBound(ConstantPropagationStore previous) {
-        return leastUpperBound(previous);
-    }
-
-    @Override
     public boolean equals(Object o) {
-        if (o == null) {
+        if (o == null)
             return false;
-        }
-        if (!(o instanceof ConstantPropagationStore)) {
+        if (!(o instanceof ConstantPropagationStore))
             return false;
-        }
         ConstantPropagationStore other = (ConstantPropagationStore) o;
         // go through all of the information of the other object
         for (Entry<Node, Constant> e : other.contents.entrySet()) {
             Node n = e.getKey();
             Constant otherVal = e.getValue();
-            if (otherVal.isBottom()) {
+            if (otherVal.isBottom())
                 continue; // no information
-            }
             if (contents.containsKey(n)) {
                 if (!otherVal.equals(contents.get(n))) {
                     return false;
@@ -116,9 +112,8 @@ public class ConstantPropagationStore implements Store<ConstantPropagationStore>
         for (Entry<Node, Constant> e : contents.entrySet()) {
             Node n = e.getKey();
             Constant thisVal = e.getValue();
-            if (thisVal.isBottom()) {
+            if (thisVal.isBottom())
                 continue; // no information
-            }
             if (other.contents.containsKey(n)) {
                 continue;
             } else {
@@ -152,12 +147,19 @@ public class ConstantPropagationStore implements Store<ConstantPropagationStore>
     }
 
     @Override
-    public boolean canAlias(FlowExpressions.Receiver a, FlowExpressions.Receiver b) {
+    public boolean canAlias(FlowExpressions.Receiver a,
+                            FlowExpressions.Receiver b) {
         return true;
     }
 
     @Override
-    public void visualize(CFGVisualizer<?, ConstantPropagationStore, ?> viz) {
-        // Do nothing since ConstantPropagationStore doesn't support visualize
+    public boolean hasDOToutput() {
+        return false;
     }
+
+    @Override
+    public String toDOToutput() {
+        return "";
+    }
+
 }

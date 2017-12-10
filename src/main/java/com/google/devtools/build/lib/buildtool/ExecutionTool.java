@@ -17,7 +17,6 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
@@ -45,7 +44,6 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
-import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
@@ -92,6 +90,7 @@ import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
@@ -108,7 +107,6 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -229,7 +227,7 @@ public class ExecutionTool {
       // client.
       cache =
           new SingleBuildFileCache(
-              env.getExecRoot().getPathString(), env.getRuntime().getFileSystem());
+              env.getExecRoot().getPathString(), env.getDirectories().getFileSystem());
     }
     this.fileCache = cache;
     this.prefetcher = builder.getActionInputPrefetcher();
@@ -302,7 +300,6 @@ public class ExecutionTool {
   private BlazeExecutor createExecutor()
       throws ExecutorInitException {
     return new BlazeExecutor(
-        runtime.getFileSystem(),
         env.getExecRoot(),
         getReporter(),
         env.getEventBus(),
@@ -324,23 +321,19 @@ public class ExecutionTool {
   }
 
   /**
-   * Performs the execution phase (phase 3) of the build, in which the Builder is applied to the
-   * action graph to bring the targets up to date. (This function will return prior to
-   * execution-proper if --nobuild was specified.)
-   *
+   * Performs the execution phase (phase 3) of the build, in which the Builder
+   * is applied to the action graph to bring the targets up to date. (This
+   * function will return prior to execution-proper if --nobuild was specified.)
    * @param buildId UUID of the build id
    * @param analysisResult the analysis phase output
    * @param buildResult the mutable build result
    * @param packageRoots package roots collected from loading phase and BuildConfigurationCollection
-   *     creation. May be empty if {@link
-   *     SkyframeExecutor#getForcedSingleSourceRootIfNoExecrootSymlinkCreation} is false.
+   * creation
    */
-  void executeBuild(
-      UUID buildId,
-      AnalysisResult analysisResult,
+  void executeBuild(UUID buildId, AnalysisResult analysisResult,
       BuildResult buildResult,
       BuildConfigurationCollection configurations,
-      PackageRoots packageRoots,
+      ImmutableMap<PackageIdentifier, Path> packageRoots,
       TopLevelArtifactContext topLevelArtifactContext)
       throws BuildFailedException, InterruptedException, TestExecException, AbruptExitException {
     Stopwatch timer = Stopwatch.createStarted();
@@ -387,7 +380,6 @@ public class ExecutionTool {
         request.getBuildOptions().getSymlinkPrefix(productName), productName);
 
     ActionCache actionCache = getActionCache();
-    actionCache.resetStatistics();
     SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
     Builder builder = createBuilder(
         request, actionCache, skyframeExecutor, modifiedOutputFiles);
@@ -437,9 +429,10 @@ public class ExecutionTool {
       executor.executionPhaseStarting();
       skyframeExecutor.drainChangedFiles();
 
-      if (request.getViewOptions().discardAnalysisCache
-          || !request.getBuildOptions().keepIncrementalityData) {
-        // Free memory by removing cache entries that aren't going to be needed.
+      if (request.getViewOptions().discardAnalysisCache) {
+        // Free memory by removing cache entries that aren't going to be needed. Note that in
+        // skyframe full, this destroys the action graph as well, so we can only do it after the
+        // action graph is no longer needed.
         env.getSkyframeBuildView()
             .clearAnalysisCache(analysisResult.getTargetsToBuild(), analysisResult.getAspects());
       }
@@ -522,19 +515,15 @@ public class ExecutionTool {
     }
   }
 
-  private void prepare(PackageRoots packageRoots) throws ExecutorInitException {
-    Optional<ImmutableMap<PackageIdentifier, Path>> packageRootMap =
-        packageRoots.getPackageRootsMap();
-    if (!packageRootMap.isPresent()) {
-      return;
-    }
+  private void prepare(ImmutableMap<PackageIdentifier, Path> packageRoots)
+      throws ExecutorInitException {
     // Prepare for build.
     Profiler.instance().markPhase(ProfilePhase.PREPARE);
 
     // Plant the symlink forest.
     try {
       new SymlinkForest(
-              packageRootMap.get(), getExecRoot(), runtime.getProductName(), env.getWorkspaceName())
+          packageRoots, getExecRoot(), runtime.getProductName(), env.getWorkspaceName())
           .plantSymlinkForest();
     } catch (IOException e) {
       throw new ExecutorInitException("Source forest creation failed", e);
@@ -684,7 +673,7 @@ public class ExecutionTool {
       ActionCache actionCache,
       SkyframeExecutor skyframeExecutor,
       ModifiedFileSet modifiedOutputFiles) {
-    BuildRequestOptions options = request.getBuildOptions();
+    BuildRequest.BuildRequestOptions options = request.getBuildOptions();
     boolean keepGoing = request.getViewOptions().keepGoing;
 
     Path actionOutputRoot = env.getActionConsoleOutputDirectory();
@@ -702,7 +691,6 @@ public class ExecutionTool {
         new ActionCacheChecker(
             actionCache,
             artifactFactory,
-            skyframeExecutor.getActionKeyContext(),
             executionFilter,
             ActionCacheChecker.CacheConfig.builder()
                 .setEnabled(options.useActionCache)
@@ -746,7 +734,6 @@ public class ExecutionTool {
    */
   private void saveActionCache(ActionCache actionCache) {
     ActionCacheStatistics.Builder builder = ActionCacheStatistics.newBuilder();
-    actionCache.mergeIntoActionCacheStatistics(builder);
 
     AutoProfiler p =
         AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, logger);

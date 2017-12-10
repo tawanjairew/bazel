@@ -56,8 +56,8 @@ public class TerminalTestResultNotifier implements TestResultNotifier {
       name = "verbose_test_summary",
       defaultValue = "true",
       category = "verbosity",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "If true, print additional information (timing, number of failed runs, etc) in the"
               + " test summary."
@@ -68,8 +68,8 @@ public class TerminalTestResultNotifier implements TestResultNotifier {
       name = "test_verbose_timeout_warnings",
       defaultValue = "false",
       category = "verbosity",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "If true, print additional warnings when the actual test execution time does not "
               + "match the timeout defined by the test (whether implied or explicit)."
@@ -96,10 +96,10 @@ public class TerminalTestResultNotifier implements TestResultNotifier {
   private boolean duplicateLabels(Set<TestSummary> summaries) {
     Set<Label> labelsSeen = new HashSet<>();
     for (TestSummary summary : summaries) {
-      if (labelsSeen.contains(summary.getLabel())) {
+      if (labelsSeen.contains(summary.getTarget().getLabel())) {
         return true;
       }
-      labelsSeen.add(summary.getLabel());
+      labelsSeen.add(summary.getTarget().getLabel());
     }
     return false;
   }

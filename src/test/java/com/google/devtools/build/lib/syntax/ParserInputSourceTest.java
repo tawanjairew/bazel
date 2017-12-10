@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.util.StringUtilities.joinLines;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -37,8 +36,7 @@ public class ParserInputSourceTest {
   public void testCreateFromFile() throws IOException {
     String content = joinLines("Line 1", "Line 2", "Line 3", "");
     Path file = scratch.file("/tmp/my/file.txt", content.getBytes(StandardCharsets.UTF_8));
-    byte[] bytes = FileSystemUtils.readWithKnownFileSize(file, file.getFileSize());
-    ParserInputSource input = ParserInputSource.create(bytes, file.asFragment());
+    ParserInputSource input = ParserInputSource.create(file);
     assertThat(new String(input.getContent())).isEqualTo(content);
     assertThat(input.getPath().toString()).isEqualTo("/tmp/my/file.txt");
   }
@@ -67,8 +65,7 @@ public class ParserInputSourceTest {
   public void testIOExceptionIfInputFileDoesNotExistForSingleArgConstructor() {
     try {
       Path path = scratch.resolve("/does/not/exist");
-      byte[] bytes = FileSystemUtils.readWithKnownFileSize(path, path.getFileSize());
-      ParserInputSource.create(bytes, path.asFragment());
+      ParserInputSource.create(path);
       fail();
     } catch (IOException e) {
       String expected = "/does/not/exist (No such file or directory)";

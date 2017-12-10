@@ -36,9 +36,12 @@ public class LabelCause implements Cause {
 
   @Override
   public BuildEventStreamProtos.BuildEventId getIdProto() {
+    BuildEventStreamProtos.BuildEventId.TargetCompletedId.newBuilder()
+        .setLabel(label.toString())
+        .build();
     return BuildEventStreamProtos.BuildEventId.newBuilder()
-        .setUnconfiguredLabel(
-            BuildEventStreamProtos.BuildEventId.UnconfiguredLabelId.newBuilder()
+        .setTargetCompleted(
+            BuildEventStreamProtos.BuildEventId.TargetCompletedId.newBuilder()
                 .setLabel(label.toString())
                 .build())
         .build();

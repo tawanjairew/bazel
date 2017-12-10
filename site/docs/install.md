@@ -8,8 +8,7 @@ title: Installing Bazel
 See the instructions for installing Bazel on:
 
 *   [Ubuntu Linux (16.04, 15.10, and 14.04)](install-ubuntu.md)
-*   [Fedora 25, 26, and CentOS 7](install-redhat.md)
-*   [macOS](install-os-x.md)
+*   [Mac OS X](install-os-x.md)
 *   [Windows](install-windows.md)
 
 For other platforms, you can try to [compile from source](install-compile-source.md).
@@ -31,9 +30,6 @@ For more information on using Bazel, see
 [Getting Started with Bazel](getting-started.html).
 
 ## <a name="bash"></a>Getting bash completion
-
-**Note:** If you installed Bazel using the custom APT repository, the bash completion script
-is already installed in `/etc/bash_completion.d`.
 
 Bazel comes with a bash completion script, which the installer copies into the
 `bin` directory. If you ran the installer with `--user`, this will be

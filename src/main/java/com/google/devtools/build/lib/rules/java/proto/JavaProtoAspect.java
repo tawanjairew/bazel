@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.TARGET;
+import static com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.cmdline.Label.parseAbsoluteUnchecked;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
@@ -29,13 +29,14 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.analysis.WrappingProvider;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -43,13 +44,14 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaLibraryHelper;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -69,13 +71,17 @@ import javax.annotation.Nullable;
 public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
 
   private static final String SPEED_PROTO_TOOLCHAIN_ATTR = ":aspect_java_proto_toolchain";
-  private final LateBoundDefault<?, Label> hostJdkAttribute;
+  private final LateBoundLabel<BuildConfiguration> hostJdkAttribute;
 
-  private static LateBoundDefault<?, Label> getSpeedProtoToolchainLabel(String defaultValue) {
-    return LateBoundDefault.fromTargetConfiguration(
-        ProtoConfiguration.class,
-        Label.parseAbsoluteUnchecked(defaultValue),
-        (rule, attributes, protoConfig) -> protoConfig.protoToolchainForJava());
+  private static Attribute.LateBoundLabel<BuildConfiguration> getSpeedProtoToolchainLabel(
+      String defaultValue) {
+    return new Attribute.LateBoundLabel<BuildConfiguration>(
+        defaultValue, ProtoConfiguration.class) {
+      @Override
+      public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+        return configuration.getFragment(ProtoConfiguration.class).protoToolchainForJava();
+      }
+    };
   }
 
   private final JavaSemantics javaSemantics;
@@ -89,7 +95,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       @Nullable String jacocoLabel,
       RpcSupport rpcSupport,
       String defaultSpeedProtoToolchainLabel,
-      LateBoundDefault<?, Label> hostJdkAttribute) {
+      LateBoundLabel<BuildConfiguration> hostJdkAttribute) {
     this.javaSemantics = javaSemantics;
     this.jacocoLabel = jacocoLabel;
     this.rpcSupport = rpcSupport;
@@ -295,8 +301,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
               .setJavacOpts(ProtoJavacOpts.constructJavacOpts(ruleContext));
       helper.addDep(dependencyCompilationArgs).setCompilationStrictDepsMode(StrictDepsMode.OFF);
       for (TransitiveInfoCollection t : getProtoRuntimeDeps()) {
-        JavaCompilationArgsProvider provider =
-            JavaInfo.getProvider(JavaCompilationArgsProvider.class, t);
+        JavaCompilationArgsProvider provider = t.getProvider(JavaCompilationArgsProvider.class);
         if (provider != null) {
           helper.addDep(provider);
         }
@@ -306,11 +311,8 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
           helper.build(
               javaSemantics,
               JavaCompilationHelper.getJavaToolchainProvider(ruleContext),
-              JavaHelper.getHostJavabaseTarget(ruleContext),
-              JavaCompilationHelper.getInstrumentationJars(ruleContext),
-              JavaRuleOutputJarsProvider.builder(),
-              /*createOutputSourceJar*/false,
-              /*outputSourceJar=*/ null),
+              JavaHelper.getHostJavabaseInputs(ruleContext),
+              JavaCompilationHelper.getInstrumentationJars(ruleContext)),
           true /* isReportedAsStrict */);
     }
 

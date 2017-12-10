@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.buildeventservice;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.v1.BuildEvent;
 import com.google.devtools.build.v1.BuildEvent.BuildComponentStreamFinished;
@@ -48,18 +47,12 @@ public class BuildEventServiceProtoUtilTest {
   private static final String BUILD_INVOCATION_ID = "feedbeef-dead-4444-beef-deaddeaddead";
   private static final String PROJECT_ID = "my_project";
   private static final String COMMAND_NAME = "test";
-  private static final String ADDITIONAL_KEYWORD = "keyword=foo";
-  private static final ImmutableList<String> EXPECTED_KEYWORDS =
-      ImmutableList.of("command_name=" + COMMAND_NAME, "protocol_name=BEP", ADDITIONAL_KEYWORD);
+  private static final ImmutableList<String> KEYWORDS =
+      ImmutableList.of("command_name=" + COMMAND_NAME, "protocol_name=BEP");
   private final ManualClock clock = new ManualClock();
   private final BuildEventServiceProtoUtil besProtocol =
       new BuildEventServiceProtoUtil(
-          BUILD_REQUEST_ID,
-          BUILD_INVOCATION_ID,
-          PROJECT_ID,
-          COMMAND_NAME,
-          clock,
-          ImmutableSet.of(ADDITIONAL_KEYWORD));
+          BUILD_REQUEST_ID, BUILD_INVOCATION_ID, PROJECT_ID, COMMAND_NAME, clock);
 
   @Test
   public void testBuildEnqueued() {
@@ -167,7 +160,7 @@ public class BuildEventServiceProtoUtilTest {
     assertThat(besProtocol.bazelEvent(1, anything))
         .isEqualTo(
             PublishBuildToolEventStreamRequest.newBuilder()
-                .addAllNotificationKeywords(EXPECTED_KEYWORDS)
+                .addAllNotificationKeywords(KEYWORDS)
                 .setOrderedBuildEvent(
                     OrderedBuildEvent.newBuilder()
                         .setStreamId(

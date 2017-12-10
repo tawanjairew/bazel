@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgs;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 
 public class StrictDepsUtils {
 
@@ -70,7 +69,7 @@ public class StrictDepsUtils {
     }
     result.addTransitiveArgs(directJars, BOTH);
     for (TransitiveInfoCollection t : protoRuntimes) {
-      JavaCompilationArgsProvider p = JavaInfo.getProvider(JavaCompilationArgsProvider.class, t);
+      JavaCompilationArgsProvider p = t.getProvider(JavaCompilationArgsProvider.class);
       if (p != null) {
         result.addTransitiveArgs(p.getJavaCompilationArgs(), BOTH);
       }

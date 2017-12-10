@@ -14,9 +14,8 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -27,6 +26,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
+import com.google.devtools.build.lib.util.Preconditions;
 
 /** Utility for generating a call to the one-version binary. */
 public final class OneVersionCheckActionBuilder {
@@ -93,7 +93,9 @@ public final class OneVersionCheckActionBuilder {
     if (enforcementLevel == OneVersionEnforcementLevel.WARNING) {
       oneVersionArgsBuilder.add("--succeed_on_found_violations");
     }
-    oneVersionArgsBuilder.addAll("--inputs", jarAndTargetVectorArg(jarsToCheck));
+    oneVersionArgsBuilder.addAll(
+        "--inputs",
+        VectorArg.of(jarsToCheck).mapped(OneVersionCheckActionBuilder::jarAndTargetArg));
     CustomCommandLine oneVersionArgs = oneVersionArgsBuilder.build();
     ruleContext.registerAction(
         new SpawnAction.Builder()
@@ -108,10 +110,6 @@ public final class OneVersionCheckActionBuilder {
             .setProgressMessage("Checking for one-version violations in %s", ruleContext.getLabel())
             .build(ruleContext));
     return outputArtifact;
-  }
-
-  public static VectorArg<String> jarAndTargetVectorArg(NestedSet<Artifact> jarsToCheck) {
-    return VectorArg.of(jarsToCheck).mapped(OneVersionCheckActionBuilder::jarAndTargetArg);
   }
 
   private static String jarAndTargetArg(Artifact jar) {

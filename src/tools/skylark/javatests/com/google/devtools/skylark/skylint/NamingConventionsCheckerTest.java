@@ -46,15 +46,13 @@ public class NamingConventionsCheckerTest {
     Truth.assertThat(errorMessage)
         .contains(
             "'badGlobalVariableName' should be lower_snake_case (for variables)"
-                + " or UPPER_SNAKE_CASE (for constants) [name-with-wrong-case]");
-    Truth.assertThat(errorMessage)
-        .contains("'BAD_FUNCTION_NAME' should be lower_snake_case [name-with-wrong-case]");
-    Truth.assertThat(errorMessage)
-        .contains("'BadParameterName' should be lower_snake_case [name-with-wrong-case]");
+                + " or UPPER_SNAKE_CASE (for constants)");
+    Truth.assertThat(errorMessage).contains("'BAD_FUNCTION_NAME' should be lower_snake_case");
+    Truth.assertThat(errorMessage).contains("'BadParameterName' should be lower_snake_case");
     Truth.assertThat(errorMessage)
         .contains(
             "'badLocalVariableName' should be lower_snake_case (for variables)"
-                + " or UPPER_SNAKE_CASE (for constants) [name-with-wrong-case]");
+                + " or UPPER_SNAKE_CASE (for constants)");
   }
 
   @Test
@@ -63,13 +61,11 @@ public class NamingConventionsCheckerTest {
     Truth.assertThat(errorMessage)
         .contains(
             "never use 'l', 'I', or 'O' as names"
-                + " (they're too easily confused with 'I', 'l', or '0') [confusing-name]");
+                + " (they're too easily confused with 'I', 'l', or '0')");
     Truth.assertThat(errorMessage)
-        .contains(
-            "identifier 'fail' shadows a builtin; please pick a different name [confusing-name]");
+        .contains("identifier 'fail' shadows a builtin; please pick a different name");
     Truth.assertThat(errorMessage)
-        .contains(
-            "identifier 'True' shadows a builtin; please pick a different name [confusing-name]");
+        .contains("identifier 'True' shadows a builtin; please pick a different name");
   }
 
   @Test
@@ -77,21 +73,10 @@ public class NamingConventionsCheckerTest {
     Truth.assertThat(findIssues("a, _ = (1, 2) # underscore to ignore assignment")).isEmpty();
     Truth.assertThat(findIssues("_ = 1", "print(_)").toString())
         .contains(
-            "2:7-2:7:"
-                + " don't use '_' as an identifier, only to ignore the result in an assignment"
-                + " [confusing-name]");
+            ":2:7: don't use '_' as an identifier, only to ignore the result in an assignment");
     Truth.assertThat(findIssues("__ = 1").toString())
         .contains(
-            "1:1-1:2:"
-                + " identifier '__' consists only of underscores; please pick a different name"
-                + " [confusing-name]");
-  }
-
-  @Test
-  public void testImportsNoIssues() throws Exception {
-    Truth.assertThat(
-            findIssues("load(':foo.bzl', 'badName', 'BadName', 'O', 'I', 'l', '_', '__', 'fail')"))
-        .isEmpty();
+            ":1:1: identifier '__' consists only of underscores; please pick a different name");
   }
 
   @Test
@@ -106,16 +91,9 @@ public class NamingConventionsCheckerTest {
 
   @Test
   public void testProviderNameMustBeCamelCase() throws Exception {
-    Truth.assertThat(findIssues("FooBarInfo = provider()")).isEmpty();
-    Truth.assertThat(findIssues("_FooBarInfo = provider()")).isEmpty();
+    Truth.assertThat(findIssues("FooBar = provider()")).isEmpty();
     Truth.assertThat(findIssues("foo_bar = provider()").toString())
-        .contains("provider name 'foo_bar' should be UpperCamelCase [name-with-wrong-case]");
-  }
-
-  @Test
-  public void testProviderNameMustEndInInfo() throws Exception {
-    Truth.assertThat(findIssues("FooBar = provider()").toString())
-        .contains("provider name 'FooBar' should end in the suffix 'Info' [provider-name-suffix]");
+        .contains("provider name 'foo_bar' should be UpperCamelCase");
   }
 
   @Test

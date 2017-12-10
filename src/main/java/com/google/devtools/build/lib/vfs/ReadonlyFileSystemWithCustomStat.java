@@ -51,17 +51,17 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public boolean supportsModifications(Path path) {
+  public boolean supportsModifications() {
     return false;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively(Path path) {
+  public boolean supportsSymbolicLinksNatively() {
     return false;
   }
 
   @Override
-  public boolean supportsHardLinksNatively(Path path) {
+  public boolean supportsHardLinksNatively() {
     return false;
   }
 
@@ -87,7 +87,7 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public void renameTo(Path sourcePath, Path targetPath) throws IOException {
+  protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
     throw modificationException();
   }
 
@@ -97,7 +97,7 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public void setLastModifiedTime(Path path, long newTime) throws IOException {
+  protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     throw modificationException();
   }
 }

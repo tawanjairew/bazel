@@ -38,7 +38,7 @@ public class AndroidResourceMerger {
     }
 
     private MergingException(String message) {
-      super("Merging Error: \n" + message);
+      super(message);
     }
 
     static MergingException wrapException(Throwable e) {
@@ -161,7 +161,7 @@ public class AndroidResourceMerger {
           type,
           symbolsOut,
           null /* rclassWriter */,
-          AndroidParsedDataDeserializer.withFilteredResources(filteredResources),
+          AndroidDataDeserializer.withFilteredResources(filteredResources),
           throwOnResourceConflict);
     } catch (IOException e) {
       throw MergingException.wrapException(e);
@@ -185,7 +185,7 @@ public class AndroidResourceMerger {
       @Nullable final AndroidResourceClassWriter rclassWriter,
       boolean throwOnResourceConflict) {
     final ParsedAndroidData.Builder primaryBuilder = ParsedAndroidData.Builder.newBuilder();
-    final AndroidDataDeserializer deserializer = AndroidParsedDataDeserializer.create();
+    final AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
     primary.deserialize(deserializer, primaryBuilder.consumers());
     ParsedAndroidData primaryData = primaryBuilder.build();
     return mergeData(
@@ -201,48 +201,6 @@ public class AndroidResourceMerger {
         rclassWriter,
         deserializer,
         throwOnResourceConflict);
-  }
-
-  /**
-   * Merges all secondary compiled resources with the primary compiled resources,
-   * given that the primary resources have been separately compiled
-   */
-  public static void mergeCompiledData(
-      final SerializedAndroidData primary,
-      final Path primaryManifest,
-      final List<? extends SerializedAndroidData> direct,
-      final List<? extends SerializedAndroidData> transitive,
-      @Nullable final AndroidResourceClassWriter rclassWriter,
-      boolean throwOnResourceConflict) {
-    final ParsedAndroidData.Builder primaryBuilder = ParsedAndroidData.Builder.newBuilder();
-    final AndroidDataDeserializer deserializer = AndroidCompiledDataDeserializer.create();
-    primary.deserialize(deserializer, primaryBuilder.consumers());
-    ParsedAndroidData primaryData = primaryBuilder.build();
-
-    Stopwatch timer = Stopwatch.createStarted();
-    final ListeningExecutorService executorService = ExecutorServiceCloser.createDefaultService();
-    try (Closeable closeable = ExecutorServiceCloser.createWith(executorService)) {
-      UnwrittenMergedAndroidData merged =
-          mergeData(
-              executorService,
-              transitive,
-              direct,
-              primaryData,
-              primaryManifest,
-              false,
-              deserializer,
-              throwOnResourceConflict);
-      timer.reset().start();
-      merged.writeResourceClass(rclassWriter);
-      logger.fine(
-          String.format("write classes finished in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
-      timer.reset().start();
-    } catch (IOException e) {
-      throw MergingException.wrapException(e);
-    } finally {
-      logger.fine(
-          String.format("write merge finished in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
-    }
   }
 }
 

@@ -79,15 +79,15 @@ public abstract class NativeProvider<VALUE extends Info> extends Provider {
     protected Info createInstanceFromSkylark(Object[] args, Location loc) {
       @SuppressWarnings("unchecked")
       Map<String, Object> kwargs = (Map<String, Object>) args[0];
-      return SkylarkInfo.fromMap(this, kwargs, loc);
+      return new SkylarkInfo(this, kwargs, loc);
     }
 
     public Info create(Map<String, Object> values, String message) {
-      return new SkylarkInfo.MapBackedSkylarkInfo(this, values, message);
+      return new SkylarkInfo(this, values, message);
     }
 
     public Info create(Location loc) {
-      return SkylarkInfo.fromMap(this, ImmutableMap.of(), loc);
+      return new SkylarkInfo(this, ImmutableMap.of(), loc);
     }
   }
 
@@ -172,6 +172,8 @@ public abstract class NativeProvider<VALUE extends Info> extends Provider {
    *
    * <p>Just a wrapper around its class.
    */
+  // todo(vladmos,dslomov): when we allow declared providers in `requiredProviders`,
+  // we will need to serialize this somehow.
   @Immutable
   public static final class NativeKey extends Key {
     private final String name;

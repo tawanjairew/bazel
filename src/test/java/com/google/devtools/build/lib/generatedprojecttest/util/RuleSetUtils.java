@@ -92,21 +92,43 @@ public class RuleSetUtils {
    */
   public static class HasAttributes implements Predicate<RuleClass> {
 
-    private final List<Pair<String, Type<?>>> attributes;
+    private enum Operator {
+      ANY, ALL
+    }
 
-    public HasAttributes(Collection<Pair<String, Type<?>>> attributes) {
+    private final List<Pair<String, Type<?>>> attributes;
+    private final Operator operator;
+
+    public HasAttributes(Collection<Pair<String, Type<?>>> attributes, Operator operator) {
       this.attributes = ImmutableList.copyOf(attributes);
+      this.operator = operator;
     }
 
     @Override
-    public boolean apply(final RuleClass ruleClass) {
-      return attributes.stream().anyMatch(pair -> ruleClass.hasAttr(pair.first, pair.second));
+    public boolean apply(final RuleClass input) {
+      switch (operator) {
+        case ANY:
+          for (Pair<String, Type<?>> attribute : attributes) {
+            if (input.hasAttr(attribute.first, attribute.second)) {
+              return true;
+            }
+          }
+          return false;
+        case ALL:
+          for (Pair<String, Type<?>> attribute : attributes) {
+            if (!input.hasAttr(attribute.first, attribute.second)) {
+              return false;
+            }
+          }
+          return true;
+      }
+      return false;
     }
   }
 
   public static Predicate<RuleClass> hasAnyAttributes(
       Collection<Pair<String, Type<?>>> attributes) {
-    return new HasAttributes(attributes);
+    return new HasAttributes(attributes, HasAttributes.Operator.ANY);
   }
 
   /**

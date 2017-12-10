@@ -14,26 +14,24 @@
 package com.google.devtools.build.android.desugar.testdata.java8;
 
 import com.google.common.collect.ImmutableList;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class ConcreteOverridesDefaultWithLambda implements DefaultInterfaceWithLambda {
   static final String TWO = String.valueOf(2);
   static final String THREE = String.valueOf(3);
 
   @Override
-  public List<String> defaultWithLambda() {
+  public ImmutableList<String> defaultWithLambda() {
     return ImmutableList.of(0, 3)
         .stream()
         .map(i -> i == 0 ? TWO : String.valueOf(i))
-        .collect(Collectors.toList());
+        .collect(ImmutableList.toImmutableList());
   }
 
   @Override
-  public List<String> digits() {
+  public ImmutableList<String> digits() {
     return ImmutableList.of(0, 4)
         .stream()
         .map(i -> i == 0 ? THREE : String.valueOf(i))
-        .collect(Collectors.toList());
+        .collect(ImmutableList.toImmutableList());
   }
 }

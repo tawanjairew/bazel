@@ -14,6 +14,7 @@
 package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import org.junit.Test;
@@ -120,6 +121,28 @@ public class InvocationPolicyUseDefaultTest extends InvocationPolicyEnforcerTest
     // should be back to their default values.
     testOptions = getTestOptions();
     assertThat(testOptions.expandedD).isEqualTo(TestOptions.EXPANDED_D_DEFAULT);
+  }
+
+  @Test
+  public void testUseDefaultWithExpansionFunction() throws Exception {
+    InvocationPolicy.Builder invocationPolicyBuilder = InvocationPolicy.newBuilder();
+    invocationPolicyBuilder
+        .addFlagPoliciesBuilder()
+        .setFlagName("test_expansion_function")
+        .getUseDefaultBuilder();
+
+    InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
+    parser.parse("--expanded_d=value to override");
+
+    TestOptions testOptions = getTestOptions();
+    assertThat(testOptions.expandedD).isEqualTo("value to override");
+
+    try {
+      enforcer.enforce(parser, BUILD_COMMAND);
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e).hasMessage("Expansion value not set.");
+    }
   }
 
   @Test
@@ -250,17 +273,16 @@ public class InvocationPolicyUseDefaultTest extends InvocationPolicyEnforcerTest
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
     parser.parse(
         "--test_implicit_requirement=" + TEST_STRING_USER_VALUE,
-        "--implicit_requirement_a=" + TEST_STRING_USER_VALUE);
+        "--implicit_requirement_a=thrownaway value");
 
-    // test_implicit_requirement sets implicit_requirement_a to "foo", but it gets overwritten
-    // by the user value.
+    // test_implicit_requirement sets implicit_requirement_a to "foo", which ignores the user's
+    // value because the parser processes implicit values last.
     TestOptions testOptions = getTestOptions();
     assertThat(testOptions.testImplicitRequirement).isEqualTo(TEST_STRING_USER_VALUE);
-    assertThat(testOptions.implicitRequirementA).isEqualTo(TEST_STRING_USER_VALUE);
+    assertThat(testOptions.implicitRequirementA)
+        .isEqualTo(TestOptions.IMPLICIT_REQUIREMENT_A_REQUIRED);
 
-    // Then policy puts implicit_requirement_a back to its default. This is "broken" since it wipes
-    // the user value, but this is the behavior that was agreed on and is documented for expansion
-    // flags as well.
+    // Then policy puts implicit_requirement_a back to its default.
     enforcer.enforce(parser, BUILD_COMMAND);
 
     testOptions = getTestOptions();

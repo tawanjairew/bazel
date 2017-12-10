@@ -633,14 +633,22 @@ public class EvaluationTest extends EvaluationTestCase {
       public void repr(SkylarkPrinter printer) {
         printer.append("<str marker>");
       }
+
+      @Override
+      public void reprLegacy(SkylarkPrinter printer) {
+        printer.append("<str legacy marker>");
+      }
     };
   }
 
   @Test
   public void testPercOnObject() throws Exception {
-    newTest()
+    newTest("--incompatible_descriptive_string_representations=true")
         .update("obj", createObjWithStr())
         .testStatement("'%s' % obj", "<str marker>");
+    newTest("--incompatible_descriptive_string_representations=false")
+        .update("obj", createObjWithStr())
+        .testStatement("'%s' % obj", "<str legacy marker>");
     newTest()
         .update("unknown", new Object())
         .testStatement("'%s' % unknown", "<unknown object java.lang.Object>");
@@ -648,9 +656,12 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testPercOnObjectList() throws Exception {
-    newTest()
+    newTest("--incompatible_descriptive_string_representations=true")
         .update("obj", createObjWithStr())
         .testStatement("'%s %s' % (obj, obj)", "<str marker> <str marker>");
+    newTest("--incompatible_descriptive_string_representations=false")
+        .update("obj", createObjWithStr())
+        .testStatement("'%s %s' % (obj, obj)", "<str legacy marker> <str legacy marker>");
     newTest()
         .update("unknown", new Object())
         .testStatement(
@@ -660,7 +671,10 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testPercOnObjectInvalidFormat() throws Exception {
-    newTest()
+    newTest("--incompatible_descriptive_string_representations=true")
+        .update("obj", createObjWithStr())
+        .testIfExactError("invalid argument <str marker> for format pattern %d", "'%d' % obj");
+    newTest("--incompatible_descriptive_string_representations=false")
         .update("obj", createObjWithStr())
         .testIfExactError("invalid argument <str marker> for format pattern %d", "'%d' % obj");
   }

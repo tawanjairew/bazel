@@ -19,7 +19,8 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.jimfs.Jimfs;
-import com.google.common.truth.Subject;
+import com.google.common.truth.FailureStrategy;
+import com.google.common.truth.SubjectFactory;
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -685,5 +686,11 @@ public class AndroidResourceClassWriterTest {
     }
   }
 
-  private static final Subject.Factory<ClassPathsSubject, Path> paths = ClassPathsSubject::new;
+  private static final SubjectFactory<ClassPathsSubject, Path> paths =
+      new SubjectFactory<ClassPathsSubject, Path>() {
+        @Override
+        public ClassPathsSubject getSubject(FailureStrategy failureStrategy, Path path) {
+          return new ClassPathsSubject(failureStrategy, path);
+        }
+      };
 }

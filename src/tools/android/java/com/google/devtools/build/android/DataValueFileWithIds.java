@@ -78,9 +78,9 @@ public class DataValueFileWithIds {
     } catch (RuntimeException e) {
       throw new RuntimeException("Error parsing " + source, e);
     }
-    overwritingConsumer.accept(fileKey, DataValueFile.of(source));
+    overwritingConsumer.consume(fileKey, DataValueFile.of(source));
     for (String id : newIds.build()) {
-      combiningConsumer.accept(
+      combiningConsumer.consume(
           fqnFactory.parse("id/" + id),
           DataResourceXml.createWithNoNamespace(source, IdXmlResourceValue.of()));
     }

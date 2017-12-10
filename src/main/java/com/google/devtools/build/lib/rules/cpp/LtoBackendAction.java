@@ -14,14 +14,12 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -29,7 +27,6 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -75,8 +72,7 @@ public final class LtoBackendAction extends SpawnAction {
       Map<String, String> executionInfo,
       CharSequence progressMessage,
       RunfilesSupplier runfilesSupplier,
-      String mnemonic,
-      @Nullable PlatformInfo executionPlatform) {
+      String mnemonic) {
     super(
         owner,
         ImmutableList.<Artifact>of(),
@@ -91,19 +87,15 @@ public final class LtoBackendAction extends SpawnAction {
         runfilesSupplier,
         mnemonic,
         false,
-        null,
-        executionPlatform);
+        null);
     mandatoryInputs = inputs;
-    Preconditions.checkState(
-        (bitcodeFiles == null) == (imports == null),
-        "Either both or neither bitcodeFiles and imports files should be null");
     bitcodeFiles = allBitcodeFiles;
     imports = importsFile;
   }
 
   @Override
   public boolean discoversInputs() {
-    return imports != null;
+    return true;
   }
 
   private Set<Artifact> computeBitcodeInputs(Collection<PathFragment> inputPaths) {
@@ -169,7 +161,13 @@ public final class LtoBackendAction extends SpawnAction {
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  public void execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
+    super.execute(actionExecutionContext);
+  }
+
+  @Override
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     try {
@@ -186,12 +184,10 @@ public final class LtoBackendAction extends SpawnAction {
     for (Artifact input : getMandatoryInputs()) {
       f.addPath(input.getExecPath());
     }
-    if (imports != null) {
-      for (PathFragment bitcodePath : bitcodeFiles.keySet()) {
-        f.addPath(bitcodePath);
-      }
-      f.addPath(imports.getExecPath());
+    for (PathFragment bitcodePath : bitcodeFiles.keySet()) {
+      f.addPath(bitcodePath);
     }
+    f.addPath(imports.getExecPath());
     f.addStringMap(getEnvironment());
     f.addStringMap(getExecutionInfo());
     return f.hexDigestAndReset();
@@ -222,8 +218,7 @@ public final class LtoBackendAction extends SpawnAction {
         ImmutableMap<String, String> executionInfo,
         CharSequence progressMessage,
         RunfilesSupplier runfilesSupplier,
-        String mnemonic,
-        @Nullable PlatformInfo executionPlatform) {
+        String mnemonic) {
       return new LtoBackendAction(
           inputsAndTools.toCollection(),
           bitcodeFiles,
@@ -236,8 +231,7 @@ public final class LtoBackendAction extends SpawnAction {
           executionInfo,
           progressMessage,
           runfilesSupplier,
-          mnemonic,
-          executionPlatform);
+          mnemonic);
     }
   }
 }

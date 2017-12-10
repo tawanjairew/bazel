@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
@@ -24,6 +23,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -425,12 +425,7 @@ public abstract class BaseFunction implements SkylarkValue {
     Object[] arguments = processArguments(args, kwargs, loc, env);
     canonicalizeArguments(arguments, loc);
 
-    try {
-      Callstack.push(this);
-      return call(arguments, ast, env);
-    } finally {
-      Callstack.pop();
-    }
+    return call(arguments, ast, env);
   }
 
   /**
@@ -572,6 +567,11 @@ public abstract class BaseFunction implements SkylarkValue {
 
   @Override
   public void repr(SkylarkPrinter printer) {
+    printer.append("<function " + getName() + ">");
+  }
+
+  @Override
+  public void reprLegacy(SkylarkPrinter printer) {
     printer.append("<function " + getName() + ">");
   }
 }

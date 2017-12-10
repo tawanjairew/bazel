@@ -19,9 +19,8 @@ import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
+import com.google.devtools.build.lib.exec.SpawnResult;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
@@ -67,8 +66,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     if (LinuxSandboxedSpawnRunner.isSupported(cmdEnv)) {
       SpawnRunner spawnRunner =
           withFallback(
-              cmdEnv,
-              LinuxSandboxedStrategy.create(cmdEnv, sandboxBase, productName, timeoutGraceSeconds));
+              cmdEnv, LinuxSandboxedStrategy.create(cmdEnv, sandboxBase, timeoutGraceSeconds));
       contexts.add(new LinuxSandboxedStrategy(spawnRunner));
     }
 
@@ -92,10 +90,9 @@ final class SandboxActionContextProvider extends ActionContextProvider {
   private static SpawnRunner createFallbackRunner(CommandEnvironment env) {
     LocalExecutionOptions localExecutionOptions =
         env.getOptions().getOptions(LocalExecutionOptions.class);
-    LocalEnvProvider localEnvProvider =
-        OS.getCurrent() == OS.DARWIN
-            ? new XCodeLocalEnvProvider()
-            : LocalEnvProvider.ADD_TEMP_POSIX;
+    LocalEnvProvider localEnvProvider = OS.getCurrent() == OS.DARWIN
+        ? new XCodeLocalEnvProvider()
+        : LocalEnvProvider.UNMODIFIED;
     return
         new LocalSpawnRunner(
             env.getExecRoot(),
@@ -122,7 +119,7 @@ final class SandboxActionContextProvider extends ActionContextProvider {
     @Override
     public SpawnResult exec(Spawn spawn, SpawnExecutionPolicy policy)
         throws InterruptedException, IOException, ExecException {
-      if (!Spawns.mayBeSandboxed(spawn)) {
+      if (!spawn.isRemotable() || spawn.hasNoSandbox()) {
         return fallbackSpawnRunner.exec(spawn, policy);
       } else {
         return sandboxSpawnRunner.exec(spawn, policy);

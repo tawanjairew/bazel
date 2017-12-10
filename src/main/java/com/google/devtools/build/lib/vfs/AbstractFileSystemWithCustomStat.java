@@ -21,13 +21,6 @@ import java.io.IOException;
  * {@link FileSystem} does).
  */
 public abstract class AbstractFileSystemWithCustomStat extends AbstractFileSystem {
-
-  public AbstractFileSystemWithCustomStat() {}
-
-  public AbstractFileSystemWithCustomStat(HashFunction hashFunction) {
-    super(hashFunction);
-  }
-
   @Override
   protected boolean isFile(Path path, boolean followSymlinks) {
     FileStatus stat = statNullable(path, followSymlinks);

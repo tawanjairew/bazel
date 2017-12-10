@@ -15,21 +15,21 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
-import javax.annotation.Nullable;
 
 /**
  * Parameters to be passed to the linker.
@@ -69,27 +69,20 @@ public final class CcLinkParams {
   private final NestedSet<LinkOptions> linkOpts;
   private final NestedSet<Linkstamp> linkstamps;
   private final NestedSet<LibraryToLink> libraries;
-  private final NestedSet<Artifact> executionDynamicLibraries;
   private final ExtraLinkTimeLibraries extraLinkTimeLibraries;
-  private final NestedSet<Artifact> nonCodeInputs;
 
-  private CcLinkParams(
-      NestedSet<LinkOptions> linkOpts,
-      NestedSet<Linkstamp> linkstamps,
-      NestedSet<LibraryToLink> libraries,
-      NestedSet<Artifact> executionDynamicLibraries,
-      ExtraLinkTimeLibraries extraLinkTimeLibraries,
-      NestedSet<Artifact> nonCodeInputs) {
+  private CcLinkParams(NestedSet<LinkOptions> linkOpts,
+                       NestedSet<Linkstamp> linkstamps,
+                       NestedSet<LibraryToLink> libraries,
+                       ExtraLinkTimeLibraries extraLinkTimeLibraries) {
     this.linkOpts = linkOpts;
     this.linkstamps = linkstamps;
     this.libraries = libraries;
-    this.executionDynamicLibraries = executionDynamicLibraries;
     this.extraLinkTimeLibraries = extraLinkTimeLibraries;
-    this.nonCodeInputs = nonCodeInputs;
   }
 
   /**
-   * Returns the linkopts
+   * @return the linkopts
    */
   public NestedSet<LinkOptions> getLinkopts() {
     return linkOpts;
@@ -100,38 +93,24 @@ public final class CcLinkParams {
   }
 
   /**
-   * Returns the linkstamps
+   * @return the linkstamps
    */
   public NestedSet<Linkstamp> getLinkstamps() {
     return linkstamps;
   }
 
   /**
-   * Returns the libraries
+   * @return the libraries
    */
   public NestedSet<LibraryToLink> getLibraries() {
     return libraries;
   }
 
   /**
-   * Returns the executionDynamicLibraries.
-   */
-  public NestedSet<Artifact> getExecutionDynamicLibraries() {
-    return executionDynamicLibraries;
-  }
-
-  /**
    * The extra link time libraries; will be null if there are no such libraries.
    */
-  public @Nullable ExtraLinkTimeLibraries getExtraLinkTimeLibraries() {
+  public ExtraLinkTimeLibraries getExtraLinkTimeLibraries() {
     return extraLinkTimeLibraries;
-  }
-
-  /**
-   * Returns the non-code inputs, e.g. linker scripts; will be null if none.
-   */
-  public @Nullable NestedSet<Artifact> getNonCodeInputs() {
-    return nonCodeInputs;
   }
 
   public static final Builder builder(boolean linkingStatically, boolean linkShared) {
@@ -140,6 +119,8 @@ public final class CcLinkParams {
 
   /**
    * Builder for {@link CcLinkParams}.
+   *
+ *
    */
   public static final class Builder {
 
@@ -165,8 +146,6 @@ public final class CcLinkParams {
         NestedSetBuilder.compileOrder();
     private final NestedSetBuilder<LibraryToLink> librariesBuilder =
         NestedSetBuilder.linkOrder();
-    private final NestedSetBuilder<Artifact> executionDynamicLibrariesBuilder =
-        NestedSetBuilder.stableOrder();
 
     /**
      * A builder for the list of link time libraries.  Most builds
@@ -174,8 +153,6 @@ public final class CcLinkParams {
      * default as null.
      */
     private ExtraLinkTimeLibraries.Builder extraLinkTimeLibrariesBuilder = null;
-
-    private NestedSetBuilder<Artifact> nonCodeInputsBuilder = null;
 
     private boolean built = false;
 
@@ -185,7 +162,7 @@ public final class CcLinkParams {
     }
 
     /**
-     * Builds a {@link CcLinkParams} object.
+     * Build a {@link CcLinkParams} object.
      */
     public CcLinkParams build() {
       Preconditions.checkState(!built);
@@ -199,17 +176,8 @@ public final class CcLinkParams {
       if (extraLinkTimeLibrariesBuilder != null) {
         extraLinkTimeLibraries = extraLinkTimeLibrariesBuilder.build();
       }
-      NestedSet<Artifact> nonCodeInputs = null;
-      if (nonCodeInputsBuilder != null) {
-        nonCodeInputs = nonCodeInputsBuilder.build();
-      }
-      return new CcLinkParams(
-          linkOptsBuilder.build(),
-          linkstampsBuilder.build(),
-          librariesBuilder.build(),
-          executionDynamicLibrariesBuilder.build(),
-          extraLinkTimeLibraries,
-          nonCodeInputs);
+      return new CcLinkParams(linkOptsBuilder.build(), linkstampsBuilder.build(),
+          librariesBuilder.build(), extraLinkTimeLibraries);
     }
 
     public boolean add(CcLinkParamsStore store) {
@@ -295,18 +263,11 @@ public final class CcLinkParams {
       linkOptsBuilder.addTransitive(args.getLinkopts());
       linkstampsBuilder.addTransitive(args.getLinkstamps());
       librariesBuilder.addTransitive(args.getLibraries());
-      executionDynamicLibrariesBuilder.addTransitive(args.getExecutionDynamicLibraries());
       if (args.getExtraLinkTimeLibraries() != null) {
         if (extraLinkTimeLibrariesBuilder == null) {
           extraLinkTimeLibrariesBuilder = ExtraLinkTimeLibraries.builder();
         }
         extraLinkTimeLibrariesBuilder.addTransitive(args.getExtraLinkTimeLibraries());
-      }
-      if (args.getNonCodeInputs() != null) {
-        if (nonCodeInputsBuilder == null) {
-          nonCodeInputsBuilder = NestedSetBuilder.linkOrder();
-        }
-        nonCodeInputsBuilder.addTransitive(args.getNonCodeInputs());
       }
       return this;
     }
@@ -345,12 +306,6 @@ public final class CcLinkParams {
       return this;
     }
 
-    /** Adds a collection of library artifacts. */
-    public Builder addExecutionDynamicLibraries(Iterable<Artifact> libraries) {
-      executionDynamicLibrariesBuilder.addAll(libraries);
-      return this;
-    }
-
     /**
      * Adds an extra link time library, a library that is actually
      * built at link time.
@@ -364,22 +319,23 @@ public final class CcLinkParams {
     }
 
     /**
-     * Adds a collection of non-code inputs.
+     * Processes typical dependencies a C/C++ library.
+     *
+     * <p>A helper method that processes getValues() and merges contents of
+     * getPreferredLibraries() and getLinkOpts() into the current link params
+     * object.
      */
-    public Builder addNonCodeInputs(Iterable<Artifact> nonCodeInputs) {
-      if (nonCodeInputsBuilder == null) {
-        nonCodeInputsBuilder = NestedSetBuilder.linkOrder();
-      }
-      nonCodeInputsBuilder.addAll(nonCodeInputs);
-      return this;
-    }
-
-    /** Processes typical dependencies of a C/C++ library. */
-    public Builder addCcLibrary(RuleContext context) {
+    public Builder addCcLibrary(RuleContext context, boolean neverlink, List<String> linkopts,
+        CcLinkingOutputs linkingOutputs) {
       addTransitiveTargets(
           context.getPrerequisites("deps", Mode.TARGET),
-          CcLinkParamsInfo.TO_LINK_PARAMS,
-          CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
+          CcLinkParamsInfo.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
+
+      if (!neverlink) {
+        addLibraries(linkingOutputs.getPreferredLibraries(linkingStatically,
+            linkShared || context.getFragment(CppConfiguration.class).forcePic()));
+        addLinkOpts(linkopts);
+      }
       return this;
     }
   }
@@ -432,13 +388,12 @@ public final class CcLinkParams {
     }
   }
 
-  /** Empty CcLinkParams. */
-  public static final CcLinkParams EMPTY =
-      new CcLinkParams(
-          NestedSetBuilder.<LinkOptions>emptySet(Order.LINK_ORDER),
-          NestedSetBuilder.<Linkstamp>emptySet(Order.COMPILE_ORDER),
-          NestedSetBuilder.<LibraryToLink>emptySet(Order.LINK_ORDER),
-          NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
-          null,
-          null);
+  /**
+   * Empty CcLinkParams.
+   */
+  public static final CcLinkParams EMPTY = new CcLinkParams(
+      NestedSetBuilder.<LinkOptions>emptySet(Order.LINK_ORDER),
+      NestedSetBuilder.<Linkstamp>emptySet(Order.COMPILE_ORDER),
+      NestedSetBuilder.<LibraryToLink>emptySet(Order.LINK_ORDER),
+      null);
 }

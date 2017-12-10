@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Event;
+
 import java.io.Serializable;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -33,21 +33,23 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public final class TaggedEvents implements Serializable {
-  private final ImmutableList<Event> events;
-  private final int hashCode;
 
-  TaggedEvents(final @Nullable String tag, ImmutableCollection<Event> events) {
-    this.events =
-        events.isEmpty()
-            ? ImmutableList.of()
-            : ImmutableList.copyOf(
-                Collections2.transform(
-                    events,
-                    (Event e) -> e.withTag(tag)));
-    this.hashCode = events.hashCode();
+  @Nullable
+  private final String tag;
+  private final ImmutableCollection<Event> events;
+
+  TaggedEvents(@Nullable String tag, ImmutableCollection<Event> events) {
+
+    this.tag = tag;
+    this.events = events;
   }
 
-  ImmutableList<Event> getEvents() {
+  @Nullable
+  String getTag() {
+    return tag;
+  }
+
+  ImmutableCollection<Event> getEvents() {
     return events;
   }
 
@@ -57,23 +59,20 @@ public final class TaggedEvents implements Serializable {
    */
   @Override
   public String toString() {
-    return events.toString();
+    return tag == null ? "<unknown>" : tag + ": " + Iterables.toString(events);
   }
 
   @Override
   public int hashCode() {
-    return hashCode;
+    return Objects.hash(tag, events);
   }
 
   @Override
   public boolean equals(Object other) {
-    if (this == other) {
-      return true;
-    }
-    if (!(other instanceof TaggedEvents)) {
+    if (other == null || !other.getClass().equals(getClass())) {
       return false;
     }
     TaggedEvents that = (TaggedEvents) other;
-    return (hashCode == that.hashCode) && Objects.equals(this.events, that.events);
+    return Objects.equals(this.tag, that.tag) && Objects.equals(this.events, that.events);
   }
 }

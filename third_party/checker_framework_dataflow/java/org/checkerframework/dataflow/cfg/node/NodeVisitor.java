@@ -4,10 +4,13 @@ package org.checkerframework.dataflow.cfg.node;
  * A visitor for a {@link Node} tree.
  *
  * @author Stefan Heule
- * @param <R> return type of the visitor. Use {@link Void} if the visitor does not have a return
- *     value.
- * @param <P> parameter type of the visitor. Use {@link Void} if the visitor does not have a
- *     parameter.
+ *
+ * @param <R>
+ *            Return type of the visitor. Use {@link Void} if the visitor does
+ *            not have a return value.
+ * @param <P>
+ *            Parameter type of the visitor. Use {@link Void} if the visitor
+ *            does not have a parameter.
  */
 public interface NodeVisitor<R, P> {
     // Literals
@@ -123,9 +126,9 @@ public interface NodeVisitor<R, P> {
     R visitTypeCast(TypeCastNode n, P p);
 
     // Blocks
-
+    
     R visitSynchronized(SynchronizedNode n, P p);
-
+    
     // Statements
     R visitAssertionError(AssertionErrorNode n, P p);
 

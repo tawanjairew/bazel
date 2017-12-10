@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.android.dex.Dex;
-import com.android.dx.dex.code.PositionList;
 import com.google.common.io.ByteStreams;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -44,10 +43,7 @@ public class DexBuilderTest {
     options.outputZip =
         FileSystems.getDefault().getPath(System.getenv("TEST_TMPDIR"), "dex_builder_test.zip");
     options.maxThreads = 1;
-    Dexing.DexingOptions dexingOptions = new Dexing.DexingOptions();
-    dexingOptions.optimize = true;
-    dexingOptions.positionInfo = PositionList.LINES;
-    DexBuilder.buildDexArchive(options, new Dexing(dexingOptions));
+    DexBuilder.buildDexArchive(options, new Dexing(new Dexing.DexingOptions()));
     assertThat(options.outputZip.toFile().exists()).isTrue();
 
     HashSet<String> files = new HashSet<>();

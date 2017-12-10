@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -132,14 +132,6 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
     return pkgResults.build();
   }
 
-  @Override
-  public Path getBuildFileForPackage(PackageIdentifier packageName) {
-    try {
-      return pkgPath.getPackageBuildFile(packageName);
-    } catch (NoSuchPackageException e) {
-      return null;
-    }
-  }
 
   @Override
   public boolean isPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageName)
@@ -177,13 +169,12 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
       ImmutableSet<PathFragment> blacklistedSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories)
       throws InterruptedException {
-    if (blacklistedSubdirectories.contains(directory)
-        || excludedSubdirectories.contains(directory)) {
-      return ImmutableList.of();
-    }
-
     PathFragment.checkAllPathsAreUnder(blacklistedSubdirectories, directory);
     PathFragment.checkAllPathsAreUnder(excludedSubdirectories, directory);
+
+    if (excludedSubdirectories.contains(directory)) {
+      return ImmutableList.of();
+    }
 
     // Check that this package is covered by at least one of our universe patterns.
     boolean inUniverse = false;

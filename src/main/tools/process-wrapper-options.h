@@ -30,8 +30,6 @@ struct Options {
   std::string stderr_path;
   // Whether to print debugging messages (-d)
   bool debug;
-  // Where to write stats, in protobuf format (-s)
-  std::string stats_path;
   // Command to run (--)
   std::vector<char *> args;
 };

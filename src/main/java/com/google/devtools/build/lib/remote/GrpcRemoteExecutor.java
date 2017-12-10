@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.remote;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
 import com.google.devtools.remoteexecution.v1test.ExecuteResponse;
 import com.google.devtools.remoteexecution.v1test.ExecutionGrpc;
@@ -45,13 +45,10 @@ class GrpcRemoteExecutor {
   private final Channel channel;
   private final CallCredentials callCredentials;
   private final int callTimeoutSecs;
-  private final RemoteRetrier retrier;
+  private final Retrier retrier;
 
-  public GrpcRemoteExecutor(
-      Channel channel,
-      @Nullable CallCredentials callCredentials,
-      int callTimeoutSecs,
-      RemoteRetrier retrier) {
+  public GrpcRemoteExecutor(Channel channel, @Nullable CallCredentials callCredentials,
+      int callTimeoutSecs, Retrier retrier) {
     Preconditions.checkArgument(callTimeoutSecs > 0, "callTimeoutSecs must be gt 0.");
     this.channel = channel;
     this.callCredentials = callCredentials;
@@ -61,42 +58,29 @@ class GrpcRemoteExecutor {
 
   private ExecutionBlockingStub execBlockingStub() {
     return ExecutionGrpc.newBlockingStub(channel)
-        .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
         .withCallCredentials(callCredentials)
         .withDeadlineAfter(callTimeoutSecs, TimeUnit.SECONDS);
   }
 
   private WatcherBlockingStub watcherBlockingStub() {
     return WatcherGrpc.newBlockingStub(channel)
-        .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
         .withCallCredentials(callCredentials);
-  }
-
-  private void handleStatus(Status statusProto) throws IOException {
-    StatusRuntimeException e = StatusProto.toStatusRuntimeException(statusProto);
-    if (e.getStatus().getCode() == Code.OK) {
-      return;
-    }
-    if (e.getStatus().getCode() == Code.DEADLINE_EXCEEDED) {
-      // This was caused by the command itself exceeding the timeout,
-      // therefore it is not retriable.
-      throw new TimeoutException();
-    }
-    throw e;
   }
 
   private @Nullable ExecuteResponse getOperationResponse(Operation op) throws IOException {
     if (op.getResultCase() == Operation.ResultCase.ERROR) {
-      handleStatus(op.getError());
+      StatusRuntimeException e = StatusProto.toStatusRuntimeException(op.getError());
+      if (e.getStatus().getCode() == Code.DEADLINE_EXCEEDED) {
+        // This was caused by the command itself exceeding the timeout,
+        // therefore it is not retriable.
+        throw new TimeoutException();
+      }
+      throw e;
     }
     if (op.getDone()) {
       Preconditions.checkState(op.getResultCase() != Operation.ResultCase.RESULT_NOT_SET);
       try {
-        ExecuteResponse resp = op.getResponse().unpack(ExecuteResponse.class);
-        if (resp.hasStatus()) {
-          handleStatus(resp.getStatus());
-        }
-        return resp;
+        return op.getResponse().unpack(ExecuteResponse.class);
       } catch (InvalidProtocolBufferException e) {
         throw new IOException(e);
       }
@@ -126,64 +110,61 @@ class GrpcRemoteExecutor {
       throws IOException, InterruptedException {
     // The only errors retried here are transient failures of the Action itself on the server, not
     // any gRPC errors that occurred during the call.
-    return retrier.execute(
-        () -> {
-          // Here all transient gRPC errors will be retried.
-          Operation op = retrier.execute(() -> execBlockingStub().execute(request));
-          ExecuteResponse resp = getOperationResponse(op);
-          if (resp != null) {
-            return resp;
-          }
-          Request wr = Request.newBuilder().setTarget(op.getName()).build();
-          // Here all transient gRPC errors will be retried, while transient failures of the Action
-          // itself will be propagated.
-          return retrier.execute(
-              () -> {
-                Iterator<ChangeBatch> replies = watcherBlockingStub().watch(wr);
-                while (replies.hasNext()) {
-                  ChangeBatch cb = replies.next();
-                  for (Change ch : cb.getChangesList()) {
-                    switch (ch.getState()) {
-                      case INITIAL_STATE_SKIPPED:
-                        continue;
-                      case ERROR:
-                        try {
-                          throw StatusProto.toStatusRuntimeException(
-                              ch.getData().unpack(Status.class));
-                        } catch (InvalidProtocolBufferException e) {
-                          throw new IOException(e);
-                        }
-                      case DOES_NOT_EXIST:
-                        // TODO(olaola): either make this retriable, or use a different exception.
-                        throw new IOException(
-                            String.format("Operation %s lost on the remote server.", op.getName()));
-                      case EXISTS:
-                        Operation o;
-                        try {
-                          o = ch.getData().unpack(Operation.class);
-                        } catch (InvalidProtocolBufferException e) {
-                          throw new IOException(e);
-                        }
-                        try {
-                          ExecuteResponse r = getOperationResponse(o);
-                          if (r != null) {
-                            return r;
-                          }
-                        } catch (StatusRuntimeException e) {
-                          // Pass through the Watch retry and retry the whole execute+watch call.
-                          throw new RemoteRetrier.PassThroughException(e);
-                        }
-                        continue;
-                      default:
-                        // This can only happen if the enum gets unexpectedly extended.
-                        throw new IOException(
-                            String.format("Illegal change state: %s", ch.getState()));
+    return retrier.execute(() -> {
+      // Here all transient gRPC errors will be retried.
+      Operation op = retrier.execute(() -> execBlockingStub().execute(request));
+      ExecuteResponse resp = getOperationResponse(op);
+      if (resp != null) {
+        return resp;
+      }
+      Request wr = Request.newBuilder().setTarget(op.getName()).build();
+      // Here all transient gRPC errors will be retried, while transient failures of the Action
+      // itself will be propagated.
+      return retrier.execute(
+          () -> {
+            Iterator<ChangeBatch> replies = watcherBlockingStub().watch(wr);
+            while (replies.hasNext()) {
+              ChangeBatch cb = replies.next();
+              for (Change ch : cb.getChangesList()) {
+                switch (ch.getState()) {
+                  case INITIAL_STATE_SKIPPED:
+                    continue;
+                  case ERROR:
+                    try {
+                      throw StatusProto.toStatusRuntimeException(ch.getData().unpack(Status.class));
+                    } catch (InvalidProtocolBufferException e) {
+                      throw new IOException(e);
                     }
-                  }
+                  case DOES_NOT_EXIST:
+                    // TODO(olaola): either make this retriable, or use a different exception.
+                    throw new IOException(
+                        String.format("Operation %s lost on the remote server.", op.getName()));
+                  case EXISTS:
+                    Operation o;
+                    try {
+                      o = ch.getData().unpack(Operation.class);
+                    } catch (InvalidProtocolBufferException e) {
+                      throw new IOException(e);
+                    }
+                    try {
+                      ExecuteResponse r = getOperationResponse(o);
+                      if (r != null) {
+                        return r;
+                      }
+                    } catch (StatusRuntimeException e) {
+                      // Pass through the Watch retry and retry the whole execute+watch call.
+                      throw new Retrier.PassThroughException(e);
+                    }
+                    continue;
+                  default:
+                    // This can only happen if the enum gets unexpectedly extended.
+                    throw new IOException(String.format("Illegal change state: %s", ch.getState()));
                 }
-                throw new IOException(
-                    String.format("Watch request for %s terminated with no result.", op.getName()));
-              });
-        });
+              }
+            }
+            throw new IOException(
+                String.format("Watch request for %s terminated with no result.", op.getName()));
+          });
+    });
   }
 }

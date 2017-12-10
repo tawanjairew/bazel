@@ -33,7 +33,6 @@ import org.junit.runners.JUnit4;
 public class ActionLookupValueTest {
 
   private FileSystem fs;
-  private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Before
   public void setUp() {
@@ -46,7 +45,7 @@ public class ActionLookupValueTest {
     Artifact artifact = mock(Artifact.class);
     when(action.getOutputs()).thenReturn(ImmutableSet.of(artifact));
     when(action.canRemoveAfterExecution()).thenReturn(true);
-    ActionLookupValue underTest = new ActionLookupValue(actionKeyContext, action, false);
+    ActionLookupValue underTest = new ActionLookupValue(action, false);
     assertThat(underTest.getGeneratingActionIndex(artifact)).isEqualTo(0);
     assertThat(underTest.getAction(0)).isSameAs(action);
     underTest.actionEvaluated(0, action);
@@ -66,7 +65,7 @@ public class ActionLookupValueTest {
     when(persistentAction.canRemoveAfterExecution()).thenReturn(false);
     ActionLookupValue underTest =
         new ActionLookupValue(
-            actionKeyContext, ImmutableList.of(normalAction, persistentAction), true);
+            ImmutableList.<ActionAnalysisMetadata>of(normalAction, persistentAction), true);
     assertThat(underTest.getGeneratingActionIndex(normalArtifact)).isEqualTo(0);
     assertThat(underTest.getAction(0)).isSameAs(normalAction);
     assertThat(underTest.getGeneratingActionIndex(persistentOutput)).isEqualTo(1);

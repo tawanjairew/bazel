@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.actions;
 
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -43,12 +42,8 @@ public interface SandboxedSpawnActionContext extends SpawnActionContext {
    * <p>If the {@link AtomicReference} is not null (thus {@code #compareAndSet} fails) and not set
    * to the unique reference of the strategy, the {@link SandboxedSpawnActionContext} should abandon
    * all results and raise {@link InterruptedException}.
-   *
-   * @return a List of {@link SpawnResult}s containing metadata about the Spawn's execution. This
-   *     will typically contain one element, but could contain no elements if spawn execution did
-   *     not complete, or contain multiple elements if multiple sub-spawns were executed
    */
-  List<SpawnResult> exec(
+  void exec(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)

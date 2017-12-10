@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -23,11 +22,13 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.serialization.NotSerializableRuntimeException;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.Collection;
 
 /**
@@ -73,9 +74,11 @@ public final class TestSuiteExpansionValue implements SkyValue {
     return new TestSuiteExpansionKey(ImmutableSortedSet.copyOf(targets));
   }
 
-  /** A list of targets of which all test suites should be expanded. */
+  /**
+   * A list of targets of which all test suites should be expanded.
+   */
   @ThreadSafe
-  static final class TestSuiteExpansionKey implements SkyKey {
+  static final class TestSuiteExpansionKey implements SkyKey, Serializable {
     private final ImmutableSortedSet<Label> targets;
 
     public TestSuiteExpansionKey(ImmutableSortedSet<Label> targets) {

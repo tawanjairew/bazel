@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.remote;
 
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
+import com.google.devtools.build.lib.remote.Digests.ActionKey;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -75,15 +75,9 @@ interface RemoteActionCache {
 
   /**
    * Upload the result of a locally executed action to the cache by uploading any necessary files,
-   * stdin / stdout, as well as adding an entry for the given action key to the cache if
-   * uploadAction is true.
+   * stdin / stdout, as well as adding an entry for the given action key to the cache.
    */
-  void upload(
-      ActionKey actionKey,
-      Path execRoot,
-      Collection<Path> files,
-      FileOutErr outErr,
-      boolean uploadAction)
+  void upload(ActionKey actionKey, Path execRoot, Collection<Path> files, FileOutErr outErr)
       throws IOException, InterruptedException;
 
   /** Release resources associated with the cache. The cache may not be used after calling this. */

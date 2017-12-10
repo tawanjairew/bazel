@@ -39,13 +39,14 @@ public final class FailAction extends AbstractAction {
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException {
+  public void execute(
+      ActionExecutionContext actionExecutionContext)
+  throws ActionExecutionException {
     throw new ActionExecutionException(errorMessage, this, false);
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     return GUID;
   }
 

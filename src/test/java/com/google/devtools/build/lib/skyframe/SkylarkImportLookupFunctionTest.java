@@ -22,10 +22,10 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
-import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.ErrorInfo;
@@ -53,10 +53,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
     packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
-            new PathPackageLocator(
-                outputBase,
-                ImmutableList.of(rootDirectory, alternativeRoot),
-                BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
+            new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory, alternativeRoot)),
             packageCacheOptions,
             Options.getDefaults(SkylarkSemanticsOptions.class),
             "",
@@ -117,7 +114,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
   public void testLoadRelativePath() throws Exception {
     scratch.file("pkg/BUILD");
     scratch.file("pkg/ext1.bzl", "a = 1");
-    scratch.file("pkg/ext2.bzl", "load(':ext1.bzl', 'a')");
+    scratch.file("pkg/ext2.bzl", "load('ext1', 'a')");
     get(key("//pkg:ext2.bzl"));
   }
 
@@ -126,7 +123,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
     scratch.file("pkg2/BUILD");
     scratch.file("pkg3/BUILD");
     scratch.file("pkg2/ext.bzl", "b = 1");
-    scratch.file("pkg3/ext.bzl", "load('//pkg2:ext.bzl', 'b')");
+    scratch.file("pkg3/ext.bzl", "load('/pkg2/ext', 'b')");
     get(key("//pkg3:ext.bzl"));
   }
 
@@ -135,7 +132,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
     scratch.file("pkg1/BUILD");
     scratch.file("pkg2/BUILD");
     scratch.file("pkg1/ext.bzl", "a = 1", "b = 2");
-    scratch.file("pkg2/ext.bzl", "load('//pkg1:ext.bzl', 'a')", "load('//pkg1:ext.bzl', 'b')");
+    scratch.file("pkg2/ext.bzl", "load('/pkg1/ext', 'a')", "load('/pkg1/ext', 'b')");
     get(key("//pkg2:ext.bzl"));
   }
 
@@ -143,7 +140,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
   public void testLoadFromSameRelativePathTwice() throws Exception {
     scratch.file("pkg/BUILD");
     scratch.file("pkg/ext1.bzl", "a = 1", "b = 2");
-    scratch.file("pkg/ext2.bzl", "load(':ext1.bzl', 'a')", "load(':ext1.bzl', 'b')");
+    scratch.file("pkg/ext2.bzl", "load('ext1', 'a')", "load('ext1', 'b')");
     get(key("//pkg:ext2.bzl"));
   }
 
@@ -151,7 +148,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
   public void testLoadFromRelativePathInSubdir() throws Exception {
     scratch.file("pkg/BUILD");
     scratch.file("pkg/subdir/ext1.bzl", "a = 1");
-    scratch.file("pkg/subdir/ext2.bzl", "load(':subdir/ext1.bzl', 'a')");
+    scratch.file("pkg/subdir/ext2.bzl", "load('ext1', 'a')");
     get(key("//pkg:subdir/ext2.bzl"));
   }
 
@@ -200,7 +197,7 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
   public void testSkylarkImportLookupNoBuildFileForLoad() throws Exception {
     scratch.file("pkg2/BUILD");
     scratch.file("pkg1/ext.bzl", "a = 1");
-    scratch.file("pkg2/ext.bzl", "load('//pkg1:ext.bzl', 'a')");
+    scratch.file("pkg2/ext.bzl", "load('/pkg1/ext', 'a')");
     SkyKey skylarkImportLookupKey =
         SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked("//pkg:ext.bzl"), false);
     EvaluationResult<SkylarkImportLookupValue> result =
@@ -216,23 +213,21 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testSkylarkImportFilenameWithControlChars() throws Exception {
+  public void testSkylarkAbsoluteImportFilenameWithControlChars() throws Exception {
     scratch.file("pkg/BUILD", "");
-    scratch.file("pkg/ext.bzl", "load('//pkg:oops\u0000.bzl', 'a')");
-    try {
-      SkyKey skylarkImportLookupKey =
-          SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked("//pkg:ext.bzl"), false);
-      EvaluationResult<SkylarkImportLookupValue> result =
-          SkyframeExecutorTestUtils.evaluate(
-              getSkyframeExecutor(), skylarkImportLookupKey, /*keepGoing=*/ false, reporter);
-      fail("Expected exception");
-    } catch (AssertionError e) {
-      String errorMessage = e.getMessage();
-      assertThat(errorMessage)
-          .contains(
-              "invalid target name 'oops<?>.bzl': "
-              + "target names may not contain non-printable characters: '\\x00'");
-    }
+    scratch.file("pkg/ext.bzl", "load('/pkg/oops\u0000', 'a')");
+    SkyKey skylarkImportLookupKey =
+        SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked("//pkg:ext.bzl"), false);
+    EvaluationResult<SkylarkImportLookupValue> result =
+        SkyframeExecutorTestUtils.evaluate(
+            getSkyframeExecutor(), skylarkImportLookupKey, /*keepGoing=*/ false, reporter);
+    assertThat(result.hasError()).isTrue();
+    ErrorInfo errorInfo = result.getError(skylarkImportLookupKey);
+    String errorMessage = errorInfo.getException().getMessage();
+    assertThat(errorMessage)
+        .isEqualTo(
+            "invalid target name 'oops<?>.bzl': "
+                + "target names may not contain non-printable characters: '\\x00'");
   }
 
   @Test

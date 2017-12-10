@@ -14,14 +14,16 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -191,9 +193,8 @@ public class EvaluationResult<T extends SkyValue> {
       return new EvaluationResult<>(result, errors, catastrophe, walkableGraph);
     }
 
-    public Builder<T> setCatastrophe(Exception catastrophe) {
+    public void setCatastrophe(Exception catastrophe) {
       this.catastrophe = catastrophe;
-      return this;
     }
   }
 }

@@ -177,13 +177,9 @@ function create_artifact() {
   maven_path=$PWD/$(echo $group_id | sed 's/\./\//g')/$artifact_id/$version
   mkdir -p $maven_path
   openssl sha1 $artifact > $maven_path/$artifact_id-$version.$packaging.sha1
+  openssl sha1 $srcjar_artifact > $maven_path/$artifact_id-$version-sources.$packaging.sha1
   mv $artifact $maven_path/$artifact_id-$version.$packaging
-
-  # srcjar_artifact is not created for AARs.
-  if [ ! -z "${srcjar_artifact+x}" ]; then
-    openssl sha1 $srcjar_artifact > $maven_path/$artifact_id-$version-sources.$packaging.sha1
-    mv $srcjar_artifact $maven_path/$artifact_id-$version-sources.$packaging
-  fi
+  mv $srcjar_artifact $maven_path/$artifact_id-$version-sources.$packaging
 }
 
 function serve_artifact() {

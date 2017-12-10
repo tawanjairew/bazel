@@ -18,25 +18,25 @@ cc_library(
         "global_variables.h",
         "startup_options.h",
     ] + select({
-        "//src/conditions:darwin": [
+        "//src:darwin": [
             "blaze_util_darwin.cc",
             "blaze_util_posix.cc",
         ],
-        "//src/conditions:darwin_x86_64": [
+        "//src:darwin_x86_64": [
             "blaze_util_darwin.cc",
             "blaze_util_posix.cc",
         ],
-        "//src/conditions:freebsd": [
+        "//src:freebsd": [
             "blaze_util_freebsd.cc",
             "blaze_util_posix.cc",
         ],
-        "//src/conditions:windows": [
+        "//src:windows": [
             "blaze_util_windows.cc",
         ],
-        "//src/conditions:windows_msys": [
+        "//src:windows_msys": [
             "blaze_util_windows.cc",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
             "blaze_util_windows.cc",
         ],
         "//conditions:default": [
@@ -49,16 +49,16 @@ cc_library(
         "blaze_util_platform.h",
     ],
     linkopts = select({
-        "//src/conditions:darwin": [
+        "//src:darwin": [
             "-framework CoreFoundation",
         ],
-        "//src/conditions:darwin_x86_64": [
+        "//src:darwin_x86_64": [
             "-framework CoreFoundation",
         ],
-        "//src/conditions:freebsd": [
+        "//src:freebsd": [
         ],
-        "//src/conditions:windows": WIN_LINK_OPTS,
-        "//src/conditions:windows_msvc": WIN_LINK_OPTS,
+        "//src:windows": WIN_LINK_OPTS,
+        "//src:windows_msvc": WIN_LINK_OPTS,
         "//conditions:default": [
             "-lrt",
         ],
@@ -67,9 +67,9 @@ cc_library(
         "//src/main/cpp/util",
         "//src/main/cpp/util:blaze_exit_code",
     ] + select({
-        "//src/conditions:windows": ["//src/main/native/windows:lib-file"],
-        "//src/conditions:windows_msys": ["//src/main/native/windows:lib-file"],
-        "//src/conditions:windows_msvc": ["//src/main/native/windows:lib-file"],
+        "//src:windows": ["//src/main/native/windows:lib-file"],
+        "//src:windows_msys": ["//src/main/native/windows:lib-file"],
+        "//src:windows_msvc": ["//src/main/native/windows:lib-file"],
         "//conditions:default": [],
     }),
 )
@@ -83,25 +83,25 @@ cc_binary(
         "global_variables.h",
         "main.cc",
     ] + select({
-        "//src/conditions:windows": ["//src/main/native/windows:resources.o"],
-        "//src/conditions:windows_msvc": ["//src/main/native/windows:resources.o"],
+        "//src:windows": ["//src/main/native/windows:resources.o"],
+        "//src:windows_msvc": ["//src/main/native/windows:resources.o"],
         "//conditions:default": [],
     }),
     copts = select({
-        "//src/conditions:windows": ["/wd4018"],
-        "//src/conditions:windows_msvc": ["/wd4018"],
+        "//src:windows": ["/wd4018"],
+        "//src:windows_msvc": ["/wd4018"],
         "//conditions:default": ["-Wno-sign-compare"],
     }),
     linkopts = select({
-        "//src/conditions:darwin": [
+        "//src:darwin": [
         ],
-        "//src/conditions:darwin_x86_64": [
+        "//src:darwin_x86_64": [
         ],
-        "//src/conditions:freebsd": [
+        "//src:freebsd": [
             "-lprocstat",
             "-lm",
         ],
-        "//src/conditions:windows_msvc": [
+        "//src:windows_msvc": [
         ],
         "//conditions:default": [
             "-lrt",

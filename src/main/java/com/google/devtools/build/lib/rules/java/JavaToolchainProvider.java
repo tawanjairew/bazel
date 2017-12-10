@@ -13,53 +13,30 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import java.util.List;
 import javax.annotation.Nullable;
 
-/** Information about the JDK used by the <code>java_*</code> rules. */
+/**
+ * Information about the JDK used by the <code>java_*</code> rules.
+ */
+@AutoValue
 @Immutable
-public class JavaToolchainProvider extends ToolchainInfo {
+public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
 
   /** Returns the Java Toolchain associated with the rule being analyzed or {@code null}. */
-  public static JavaToolchainProvider from(RuleContext ruleContext) {
-    return from(ruleContext, ":java_toolchain");
-  }
-
-  public static JavaToolchainProvider from(
-      RuleContext ruleContext, String attributeName) {
-    TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite(attributeName, Mode.TARGET);
-    return from(prerequisite, ruleContext);
-  }
-
-  public static JavaToolchainProvider from(TransitiveInfoCollection collection) {
-    return from(collection, null);
-  }
-
-  private static JavaToolchainProvider from(
-      TransitiveInfoCollection collection, @Nullable RuleErrorConsumer errorConsumer) {
-    ToolchainInfo toolchainInfo = collection.get(ToolchainInfo.PROVIDER);
-    if (toolchainInfo instanceof JavaToolchainProvider) {
-      return (JavaToolchainProvider) toolchainInfo;
-    }
-
-    if (errorConsumer != null) {
-      errorConsumer.ruleError("The selected Java toolchain is not a JavaToolchainProvider");
-    }
-    return null;
+  public static JavaToolchainProvider fromRuleContext(RuleContext ruleContext) {
+    return ruleContext.getPrerequisite(":java_toolchain", Mode.TARGET, JavaToolchainProvider.class);
   }
 
   public static JavaToolchainProvider create(
@@ -70,19 +47,18 @@ public class JavaToolchainProvider extends ToolchainInfo {
       List<String> defaultJavacFlags,
       Artifact javac,
       NestedSet<Artifact> tools,
-      FilesToRunProvider javaBuilder,
+      Artifact javaBuilder,
       @Nullable Artifact headerCompiler,
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
-      @Nullable Artifact oneVersion,
-      @Nullable Artifact oneVersionWhitelist,
+      Artifact oneVersion,
+      Artifact oneVersionWhitelist,
       Artifact genClass,
       @Nullable Artifact resourceJarBuilder,
       @Nullable Artifact timezoneData,
       FilesToRunProvider ijar,
-      ImmutableListMultimap<String, String> compatibleJavacOptions,
-      ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration) {
-    return new JavaToolchainProvider(
+      ImmutableListMultimap<String, String> compatibleJavacOptions) {
+    return new AutoValue_JavaToolchainProvider(
         label,
         data.getSourceVersion(),
         data.getTargetVersion(),
@@ -109,191 +85,76 @@ public class JavaToolchainProvider extends ToolchainInfo {
             .addAll(defaultJavacFlags)
             .build(),
         data.getJvmOptions(),
-        data.getJavacSupportsWorkers(),
-        pluginConfiguration);
-  }
-
-  private final Label label;
-  private final String sourceVersion;
-  private final String targetVersion;
-  private final NestedSet<Artifact> bootclasspath;
-  private final NestedSet<Artifact> extclasspath;
-  private final String encoding;
-  private final Artifact javac;
-  private final NestedSet<Artifact> tools;
-  private final FilesToRunProvider javaBuilder;
-  @Nullable private final Artifact headerCompiler;
-  private final boolean forciblyDisableHeaderCompilation;
-  private final Artifact singleJar;
-  @Nullable private final Artifact oneVersion;
-  @Nullable private final Artifact oneVersionWhitelist;
-  private final Artifact genClass;
-  @Nullable private final Artifact resourceJarBuilder;
-  @Nullable private final Artifact timezoneData;
-  private final FilesToRunProvider ijar;
-  private final ImmutableListMultimap<String, String> compatibleJavacOptions;
-  private final ImmutableList<String> javacOptions;
-  private final ImmutableList<String> jvmOptions;
-  private final boolean javacSupportsWorkers;
-  private final ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration;
-
-  private JavaToolchainProvider(
-      Label label,
-      String sourceVersion,
-      String targetVersion,
-      NestedSet<Artifact> bootclasspath,
-      NestedSet<Artifact> extclasspath,
-      String encoding,
-      Artifact javac,
-      NestedSet<Artifact> tools,
-      FilesToRunProvider javaBuilder,
-      @Nullable Artifact headerCompiler,
-      boolean forciblyDisableHeaderCompilation,
-      Artifact singleJar,
-      @Nullable Artifact oneVersion,
-      @Nullable Artifact oneVersionWhitelist,
-      Artifact genClass,
-      @Nullable Artifact resourceJarBuilder,
-      @Nullable Artifact timezoneData,
-      FilesToRunProvider ijar,
-      ImmutableListMultimap<String, String> compatibleJavacOptions,
-      ImmutableList<String> javacOptions,
-      ImmutableList<String> jvmOptions,
-      boolean javacSupportsWorkers,
-      ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration) {
-    super(ImmutableMap.of(), Location.BUILTIN);
-
-    this.label = label;
-    this.sourceVersion = sourceVersion;
-    this.targetVersion = targetVersion;
-    this.bootclasspath = bootclasspath;
-    this.extclasspath = extclasspath;
-    this.encoding = encoding;
-    this.javac = javac;
-    this.tools = tools;
-    this.javaBuilder = javaBuilder;
-    this.headerCompiler = headerCompiler;
-    this.forciblyDisableHeaderCompilation = forciblyDisableHeaderCompilation;
-    this.singleJar = singleJar;
-    this.oneVersion = oneVersion;
-    this.oneVersionWhitelist = oneVersionWhitelist;
-    this.genClass = genClass;
-    this.resourceJarBuilder = resourceJarBuilder;
-    this.timezoneData = timezoneData;
-    this.ijar = ijar;
-    this.compatibleJavacOptions = compatibleJavacOptions;
-    this.javacOptions = javacOptions;
-    this.jvmOptions = jvmOptions;
-    this.javacSupportsWorkers = javacSupportsWorkers;
-    this.pluginConfiguration = pluginConfiguration;
+        data.getJavacSupportsWorkers());
   }
 
   /** Returns the label for this {@code java_toolchain}. */
-  public Label getToolchainLabel() {
-    return label;
-  }
+  public abstract Label getToolchainLabel();
 
   /** @return the input Java language level */
-  public String getSourceVersion() {
-    return sourceVersion;
-  }
+  public abstract String getSourceVersion();
 
   /** @return the target Java language level */
-  public String getTargetVersion() {
-    return targetVersion;
-  }
+  public abstract String getTargetVersion();
 
   /** @return the target Java bootclasspath */
-  public NestedSet<Artifact> getBootclasspath() {
-    return bootclasspath;
-  }
+  public abstract NestedSet<Artifact> getBootclasspath();
 
   /** @return the target Java extclasspath */
-  public NestedSet<Artifact> getExtclasspath() {
-    return extclasspath;
-  }
+  public abstract NestedSet<Artifact> getExtclasspath();
 
   /** @return the encoding for Java source files */
-  public String getEncoding() {
-    return encoding;
-  }
+  public abstract String getEncoding();
 
   /** Returns the {@link Artifact} of the javac jar */
-  public Artifact getJavac() {
-    return javac;
-  }
+  public abstract Artifact getJavac();
 
   /** Returns the {@link Artifact}s of compilation tools. */
-  public NestedSet<Artifact> getTools() {
-    return tools;
-  }
+  public abstract NestedSet<Artifact> getTools();
 
-  /** Returns the {@link FilesToRunProvider} of JavaBuilder */
-  public FilesToRunProvider getJavaBuilder() {
-    return javaBuilder;
-  }
+  /** Returns the {@link Artifact} of the JavaBuilder deploy jar */
+  public abstract Artifact getJavaBuilder();
 
   /** @return the {@link Artifact} of the Header Compiler deploy jar */
-  @Nullable
-  public Artifact getHeaderCompiler() {
-    return headerCompiler;
-  }
+  @Nullable public abstract Artifact getHeaderCompiler();
 
   /**
-   * Returns {@code true} if header compilation should be forcibly disabled, overriding
+   * Returns true if header compilation should be forcibly disabled, overriding
    * --java_header_compilation.
    */
-  public boolean getForciblyDisableHeaderCompilation() {
-    return forciblyDisableHeaderCompilation;
-  }
+  public abstract boolean getForciblyDisableHeaderCompilation();
 
   /** Returns the {@link Artifact} of the SingleJar deploy jar */
-  public Artifact getSingleJar() {
-    return singleJar;
-  }
+  public abstract Artifact getSingleJar();
 
   /**
    * Return the {@link Artifact} of the binary that enforces one-version compliance of java
    * binaries.
    */
   @Nullable
-  public Artifact getOneVersionBinary() {
-    return oneVersion;
-  }
+  public abstract Artifact getOneVersionBinary();
 
   /** Return the {@link Artifact} of the whitelist used by the one-version compliance checker. */
   @Nullable
-  public Artifact getOneVersionWhitelist() {
-    return oneVersionWhitelist;
-  }
+  public abstract Artifact getOneVersionWhitelist();
 
   /** Returns the {@link Artifact} of the GenClass deploy jar */
-  public Artifact getGenClass() {
-    return genClass;
-  }
+  public abstract Artifact getGenClass();
 
   @Nullable
-  public Artifact getResourceJarBuilder() {
-    return resourceJarBuilder;
-  }
+  public abstract Artifact getResourceJarBuilder();
 
   /**
    * Returns the {@link Artifact} of the latest timezone data resource jar that can be loaded by
    * Java 8 binaries.
    */
   @Nullable
-  public Artifact getTimezoneData() {
-    return timezoneData;
-  }
+  public abstract Artifact getTimezoneData();
 
   /** Returns the ijar executable */
-  public FilesToRunProvider getIjar() {
-    return ijar;
-  }
+  public abstract FilesToRunProvider getIjar();
 
-  ImmutableListMultimap<String, String> getCompatibleJavacOptions() {
-    return compatibleJavacOptions;
-  }
+  abstract ImmutableListMultimap<String, String> getCompatibleJavacOptions();
 
   /** @return the map of target environment-specific javacopts. */
   public ImmutableList<String> getCompatibleJavacOptions(String key) {
@@ -301,24 +162,15 @@ public class JavaToolchainProvider extends ToolchainInfo {
   }
 
   /** @return the list of default options for the java compiler */
-  public ImmutableList<String> getJavacOptions() {
-    return javacOptions;
-  }
+  public abstract ImmutableList<String> getJavacOptions();
 
   /**
    * @return the list of default options for the JVM running the java compiler and associated tools.
    */
-  public ImmutableList<String> getJvmOptions() {
-    return jvmOptions;
-  }
+  public abstract ImmutableList<String> getJvmOptions();
 
   /** @return whether JavaBuilders supports running as a persistent worker or not */
-  public boolean getJavacSupportsWorkers() {
-    return javacSupportsWorkers;
-  }
+  public abstract boolean getJavacSupportsWorkers();
 
-  /** Returns the global {@code java_plugin_configuration} data. */
-  public ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration() {
-    return pluginConfiguration;
-  }
+  JavaToolchainProvider() {}
 }

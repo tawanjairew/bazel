@@ -30,7 +30,6 @@ import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.TreeScanner;
 import java.io.IOError;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -48,9 +47,9 @@ import javax.tools.JavaFileObject.Kind;
  */
 public class JavacTransitive {
 
-  private final ImmutableSet<Path> platformJars;
+  private final ImmutableSet<String> platformJars;
 
-  public JavacTransitive(ImmutableSet<Path> platformJars) {
+  public JavacTransitive(ImmutableSet<String> platformJars) {
     this.platformJars = platformJars;
   }
 
@@ -102,7 +101,7 @@ public class JavacTransitive {
       if (transitive.containsKey(name)) {
         continue;
       }
-      if (StrictJavaDepsPlugin.getJarPath(sym, platformJars) == null) {
+      if (StrictJavaDepsPlugin.getJarName(sym, platformJars) == null) {
         // Don't repackage symbols we wouldn't report in jdeps, e.g. because they're on the
         // bootclasspath.
         continue;

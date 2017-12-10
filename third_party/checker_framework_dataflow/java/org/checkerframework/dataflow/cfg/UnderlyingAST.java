@@ -6,10 +6,11 @@ import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 
 /**
- * Represents an abstract syntax tree of type {@link Tree} that underlies a given control flow
- * graph.
+ * Represents an abstract syntax tree of type {@link Tree} that underlies a
+ * given control flow graph.
  *
  * @author Stefan Heule
+ *
  */
 public abstract class UnderlyingAST {
     public enum Kind {
@@ -18,7 +19,9 @@ public abstract class UnderlyingAST {
         /** The underlying code is a lambda expression */
         LAMBDA,
 
-        /** The underlying code is an arbitrary Java statement or expression */
+        /**
+         * The underlying code is an arbitrary Java statement or expression
+         */
         ARBITRARY_CODE,
     }
 
@@ -28,14 +31,18 @@ public abstract class UnderlyingAST {
         this.kind = kind;
     }
 
-    /** @return the code that corresponds to the CFG */
-    public abstract Tree getCode();
+    /**
+     * @return The code that corresponds to the CFG.
+     */
+    abstract public Tree getCode();
 
     public Kind getKind() {
         return kind;
     }
 
-    /** If the underlying AST is a method. */
+    /**
+     * If the underlying AST is a method.
+     */
     public static class CFGMethod extends UnderlyingAST {
 
         /** The method declaration */
@@ -69,7 +76,9 @@ public abstract class UnderlyingAST {
         }
     }
 
-    /** If the underlying AST is a lambda. */
+    /**
+     * If the underlying AST is a lambda.
+     */
     public static class CFGLambda extends UnderlyingAST {
 
         private final LambdaExpressionTree lambda;
@@ -94,27 +103,21 @@ public abstract class UnderlyingAST {
         }
     }
 
-    /** If the underlying AST is a statement or expression. */
+    /**
+     * If the underlying AST is a statement or expression.
+     */
     public static class CFGStatement extends UnderlyingAST {
 
         protected final Tree code;
 
-        /** The class tree this method belongs to. */
-        protected final ClassTree classTree;
-
-        public CFGStatement(Tree code, ClassTree classTree) {
+        public CFGStatement(Tree code) {
             super(Kind.ARBITRARY_CODE);
             this.code = code;
-            this.classTree = classTree;
         }
 
         @Override
         public Tree getCode() {
             return code;
-        }
-
-        public ClassTree getClassTree() {
-            return classTree;
         }
 
         @Override

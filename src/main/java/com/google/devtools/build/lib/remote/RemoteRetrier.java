@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.remote;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.util.Preconditions;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
@@ -36,13 +36,13 @@ import java.util.function.Supplier;
  *      // Not retried.
  *      throw PassThroughException(new IOException("fail"));
  *    }
- *   } catch (RetryException e) {
+ *   } catch (RetryException2 e) {
  *     // e.getCause() is the IOException
  *     System.out.println(e.getCause());
  *   }
  * </code>
  */
-class RemoteRetrier extends Retrier {
+class RemoteRetrier extends Retrier2 {
 
   /**
    * Wraps around an {@link Exception} to make it pass through a single layer of retries.
@@ -68,7 +68,6 @@ class RemoteRetrier extends Retrier {
           case INTERNAL:
           case UNAVAILABLE:
           case UNAUTHENTICATED:
-          case RESOURCE_EXHAUSTED:
             return true;
           default:
             return false;
@@ -96,13 +95,13 @@ class RemoteRetrier extends Retrier {
   }
 
   @Override
-  public <T> T execute(Callable<T> call) throws RetryException, InterruptedException {
+  public <T> T execute(Callable<T> call) throws RetryException2, InterruptedException {
     try {
       return super.execute(call);
-    } catch (RetryException e) {
+    } catch (RetryException2 e) {
       if (e.getCause() instanceof PassThroughException) {
         PassThroughException passThrough = (PassThroughException) e.getCause();
-        throw new RetryException("Retries aborted because of PassThroughException",
+        throw new RetryException2("Retries aborted because of PassThroughException",
             e.getAttempts(), (Exception) passThrough.getCause());
       }
       throw e;
@@ -116,7 +115,7 @@ class RemoteRetrier extends Retrier {
     return e -> !(e instanceof PassThroughException) && delegate.test(e);
   }
 
-  static class ExponentialBackoff implements Retrier.Backoff {
+  static class ExponentialBackoff implements Retrier2.Backoff {
 
     private final long maxMillis;
     private long nextDelayMillis;

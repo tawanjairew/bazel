@@ -5,7 +5,6 @@ title: Style guide for bzl files
 
 # .bzl file style guide
 
-
 ## Style
 
 * When in doubt, follow the

@@ -28,11 +28,13 @@ public class FetchOptions extends OptionsBase {
     abbrev = 'k',
     defaultValue = "false",
     category = "strategy",
-    documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-    effectTags = {OptionEffectTag.EAGERNESS_TO_EXIT},
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
     help =
-        "Continue as much as possible after an error.  While the target that failed and those "
-            + "that depend on it cannot be analyzed, other prerequisites of these targets can be."
+        "Continue as much as possible after an error.  While the "
+            + "target that failed and those that depend on it cannot be "
+            + "analyzed, other prerequisites of these "
+            + "targets can be."
   )
   public boolean keepGoing;
 }

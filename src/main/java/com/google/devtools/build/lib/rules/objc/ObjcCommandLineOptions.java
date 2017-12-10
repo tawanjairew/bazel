@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.DottedVersionConverter;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
+import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
@@ -120,7 +121,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     defaultValue = "",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS},
     help = "Additional options to pass to Objective C compilation."
   )
   public List<String> copts;
@@ -130,7 +131,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     defaultValue = "false",
     category = "misc",
     documentationCategory = OptionDocumentationCategory.TESTING,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS},
     help = "Enable checking for memory leaks in ios_test targets."
   )
   public boolean runMemleaks;
@@ -152,7 +153,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     defaultValue = "-O0,-DDEBUG=1",
     converter = CommaSeparatedOptionListConverter.class,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS},
     help = "Uses these strings as objc fastbuild compiler options."
   )
   public List<String> fastbuildOptions;
@@ -161,7 +162,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     name = "experimental_objc_enable_module_maps",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS},
     help = "Enables module map generation and interpretation."
   )
   public boolean enableModuleMaps;
@@ -171,7 +172,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     defaultValue = "false",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS},
     help =
         "Whether to perform symbol and dead-code strippings on linked binaries. Binary "
             + "strippings will be performed if both this flag and --compilationMode=opt are "
@@ -184,7 +185,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     defaultValue = "false",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_OPTIONS},
     help = "Whether to generate debug symbol(.dSYM) file(s)."
   )
   public boolean appleGenerateDsym;
@@ -194,7 +195,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     defaultValue = "null",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.SIGNING,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS},
     help =
         "Certificate name to use for iOS signing. If not set will fall back to provisioning "
             + "profile. May be the certificate's keychain identity preference or (substring) of "
@@ -204,9 +205,9 @@ public class ObjcCommandLineOptions extends FragmentOptions {
 
   @Option(
     name = "objc_debug_with_GLIBCXX",
-    defaultValue = "false",
+    defaultValue = "true",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    effectTags = {OptionEffectTag.ACTION_OPTIONS},
     help =
         "If set, and compilation mode is set to 'dbg', define GLIBCXX_DEBUG, "
             + " GLIBCXX_DEBUG_PEDANTIC and GLIBCPP_CONCEPT_CHECKS."
@@ -237,6 +238,38 @@ public class ObjcCommandLineOptions extends FragmentOptions {
             + "when signing."
   )
   public boolean deviceDebugEntitlements;
+
+  /** Specifies the circumstances under which a CROSSTOOL is used for objc in this configuration. */
+  public enum ObjcCrosstoolMode {
+    /** The CROSSTOOL is used for all objc compile, archive, and link actions. */
+    ALL,
+
+    /**
+     * The CROSSTOOL is used for all objc compile and archive actions originating from an
+     * objc_library target.
+     */
+    LIBRARY,
+
+    /** The CROSSTOOL is not used for any objc action. */
+    OFF
+  }
+
+  /** Converter for {@link ObjcCrosstoolMode}. */
+  public static class ObjcCrosstoolUsageConverter extends EnumConverter<ObjcCrosstoolMode> {
+    public ObjcCrosstoolUsageConverter() {
+      super(ObjcCrosstoolMode.class, "objc crosstool mode");
+    }
+  }
+
+  @Option(
+    name = "experimental_objc_crosstool",
+    defaultValue = "all",
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    effectTags = {OptionEffectTag.CHANGES_INPUTS},
+    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+    converter = ObjcCrosstoolUsageConverter.class
+  )
+  public ObjcCrosstoolMode objcCrosstoolMode;
 
   @Option(
     name = "objc_use_dotd_pruning",

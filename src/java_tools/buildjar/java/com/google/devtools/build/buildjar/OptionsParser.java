@@ -156,24 +156,24 @@ public final class OptionsParser {
           collectFlagArguments(sourceJars, argQueue, "-");
           break;
         case "--classpath":
-          collectFlagArguments(classPath, argQueue, "-");
+          collectClassPathArguments(classPath, argQueue);
           break;
+          // TODO(#970): Consider wether we want to use --sourcepath for resolving of #970.
         case "--sourcepath":
-          // TODO(#970): Consider whether we want to use --sourcepath for resolving of #970.
-          collectFlagArguments(sourcePath, argQueue, "-");
+          collectClassPathArguments(sourcePath, argQueue);
           break;
         case "--bootclasspath":
-          collectFlagArguments(bootClassPath, argQueue, "-");
+          collectClassPathArguments(bootClassPath, argQueue);
           break;
         case "--processorpath":
-          collectFlagArguments(processorPath, argQueue, "-");
+          collectClassPathArguments(processorPath, argQueue);
           break;
         case "--processors":
           collectProcessorArguments(processorNames, argQueue, "-");
           break;
         case "--extclasspath":
         case "--extdir":
-          collectFlagArguments(extClassPath, argQueue, "-");
+          collectClassPathArguments(extClassPath, argQueue);
           break;
         case "--output":
           outputJar = getArgument(argQueue, arg);
@@ -292,6 +292,17 @@ public final class OptionsParser {
 
   private static final Splitter CLASSPATH_SPLITTER =
       Splitter.on(File.pathSeparatorChar).trimResults().omitEmptyStrings();
+
+  // TODO(cushon): stop splitting classpaths once cl/127006119 is released
+  private static void collectClassPathArguments(Collection<String> output, Deque<String> args) {
+    for (String arg = args.pollFirst(); arg != null; arg = args.pollFirst()) {
+      if (arg.startsWith("-")) {
+        args.addFirst(arg);
+        break;
+      }
+      Iterables.addAll(output, CLASSPATH_SPLITTER.split(arg));
+    }
+  }
 
   /**
    * Collects the arguments for the --processors command line flag until it finds a flag that starts

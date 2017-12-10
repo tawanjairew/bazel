@@ -49,7 +49,6 @@ public abstract class ParallelVisitor<T, V> {
   private final Uniquifier<T> uniquifier;
   private final Callback<V> callback;
   private final int visitBatchSize;
-  private final int processResultsBatchSize;
 
   private final VisitingTaskExecutor executor;
 
@@ -118,15 +117,10 @@ public abstract class ParallelVisitor<T, V> {
           /*workQueue=*/ new BlockingStack<Runnable>(),
           new ThreadFactoryBuilder().setNameFormat("parallel-visitor %d").build());
 
-  protected ParallelVisitor(
-      Uniquifier<T> uniquifier,
-      Callback<V> callback,
-      int visitBatchSize,
-      int processResultsBatchSize) {
+  protected ParallelVisitor(Uniquifier<T> uniquifier, Callback<V> callback, int visitBatchSize) {
     this.uniquifier = uniquifier;
     this.callback = callback;
     this.visitBatchSize = visitBatchSize;
-    this.processResultsBatchSize = processResultsBatchSize;
     this.executor =
         new VisitingTaskExecutor(FIXED_THREAD_POOL_EXECUTOR, PARALLEL_VISITOR_ERROR_CLASSIFIER);
   }
@@ -218,7 +212,7 @@ public abstract class ParallelVisitor<T, V> {
 
       Visit visit = getVisitResult(uniqueKeys);
       for (Iterable<SkyKey> keysToUseForResultBatch :
-          Iterables.partition(visit.keysToUseForResult, processResultsBatchSize)) {
+          Iterables.partition(visit.keysToUseForResult, SkyQueryEnvironment.BATCH_CALLBACK_SIZE)) {
         executor.execute(new GetAndProcessResultsTask(keysToUseForResultBatch));
       }
 

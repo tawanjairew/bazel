@@ -320,8 +320,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                         : staticOutputFile,
                     CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
                     CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext),
-                    featureConfiguration,
-                    MockCppSemantics.INSTANCE) {};
+                    featureConfiguration) {};
             builder.addCompilationInputs(
                 attributesToFlip.contains(NonStaticAttributes.COMPILATION_INPUTS)
                     ? ImmutableList.of(oFile)
@@ -344,8 +343,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
             return builder.build();
           }
-        },
-        actionKeyContext);
+        });
   }
 
   private enum StaticKeyAttributes {
@@ -383,8 +381,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                         : dynamicOutputFile,
                     CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
                     CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext),
-                    featureConfiguration,
-                    MockCppSemantics.INSTANCE) {};
+                    featureConfiguration) {};
             builder.addCompilationInputs(
                 attributes.contains(StaticKeyAttributes.COMPILATION_INPUTS)
                     ? ImmutableList.of(oFile)
@@ -396,8 +393,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             builder.setLibraryIdentifier("foo");
             return builder.build();
           }
-        },
-        actionKeyContext);
+        });
   }
 
   @Test
@@ -417,8 +413,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             output,
             CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
             CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext),
-            FeatureConfiguration.EMPTY,
-            MockCppSemantics.INSTANCE);
+            FeatureConfiguration.EMPTY);
     builder.setLinkType(LinkTargetType.STATIC_LIBRARY);
     assertThat(builder.canSplitCommandLine()).isTrue();
 
@@ -511,8 +506,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 ruleContext.getConfiguration(),
                 CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
                 CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext),
-                featureConfiguration,
-                MockCppSemantics.INSTANCE)
+                featureConfiguration)
             .addObjectFiles(nonLibraryInputs)
             .addLibraries(NestedSetBuilder.wrap(Order.LINK_ORDER, libraryInputs))
             .setLinkType(type)

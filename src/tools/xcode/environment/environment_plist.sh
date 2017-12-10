@@ -25,7 +25,7 @@
 
 set -eu
 
-while [[ $# -gt 1 ]]
+while [[ $# > 1 ]]
 do
 key="$1"
 

@@ -37,9 +37,9 @@ from functools import total_ordering
 
 import six
 
-from gflags import _helpers
-from gflags import argument_parser
-from gflags import exceptions
+import _helpers
+import argument_parser
+import exceptions
 
 
 class _FlagMetaClass(type):

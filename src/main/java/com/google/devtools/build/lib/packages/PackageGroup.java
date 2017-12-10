@@ -14,15 +14,13 @@
 
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License.DistributionType;
-import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -38,7 +36,7 @@ public class PackageGroup implements Target {
   private final Label label;
   private final Location location;
   private final Package containingPackage;
-  private final PackageGroupContents packageSpecifications;
+  private final List<PackageSpecification> packageSpecifications;
   private final List<Label> includes;
 
   public PackageGroup(
@@ -69,19 +67,25 @@ public class PackageGroup implements Target {
         packagesBuilder.add(specification);
       }
     }
-    this.packageSpecifications = PackageGroupContents.create(packagesBuilder.build());
+    this.packageSpecifications = packagesBuilder.build();
   }
 
   public boolean containsErrors() {
     return containsErrors;
   }
 
-  public PackageGroupContents getPackageSpecifications() {
+  public Iterable<PackageSpecification> getPackageSpecifications() {
     return packageSpecifications;
   }
 
   public boolean contains(Package pkg) {
-    return packageSpecifications.containsPackage(pkg.getPackageIdentifier());
+    for (PackageSpecification specification : packageSpecifications) {
+      if (specification.containsPackage(pkg.getPackageIdentifier())) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   public List<Label> getIncludes() {
@@ -89,7 +93,11 @@ public class PackageGroup implements Target {
   }
 
   public List<String> getContainedPackages() {
-    return packageSpecifications.containedPackages().collect(toImmutableList());
+    List<String> result = Lists.newArrayListWithCapacity(packageSpecifications.size());
+    for (PackageSpecification specification : packageSpecifications) {
+      result.add(specification.toString());
+    }
+    return result;
   }
 
   @Override

@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.genquery;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -23,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -72,12 +70,11 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.skyframe.TransitiveTargetKey;
 import com.google.devtools.build.lib.skyframe.TransitiveTargetValue;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -217,7 +214,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Label> validTargets = NestedSetBuilder.stableOrder();
     Set<PackageIdentifier> successfulPackageNames = new LinkedHashSet<>();
     for (Target target : scope) {
-      SkyKey key = TransitiveTargetKey.of(target.getLabel());
+      SkyKey key = TransitiveTargetValue.key(target.getLabel());
       TransitiveTargetValue transNode = (TransitiveTargetValue) env.getValue(key);
       if (transNode == null) {
         return null;
@@ -318,7 +315,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
           (BlazeQueryEnvironment)
               QUERY_ENVIRONMENT_FACTORY.create(
                   /*transitivePackageLoader=*/ null,
-                  /* graphFactory= */ null,
+                  /*graph=*/ null,
                   packageProvider,
                   evaluator,
                   /*keepGoing=*/ false,
@@ -377,7 +374,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     }
 
     @Override
-    protected String computeKey(ActionKeyContext actionKeyContext) {
+    protected String computeKey() {
       Fingerprint f = new Fingerprint();
       f.addBytes(result.toByteArray());
       return f.hexDigestAndReset();
@@ -560,15 +557,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     @Override
     public boolean isPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageName) {
       throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Path getBuildFileForPackage(PackageIdentifier packageId) {
-      Package pkg = pkgMap.get(packageId);
-      if (pkg == null) {
-        return null;
-      }
-      return pkg.getBuildFile().getPath();
     }
   }
 

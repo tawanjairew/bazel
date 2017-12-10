@@ -23,12 +23,10 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.Spawns;
+import com.google.devtools.build.lib.exec.SpawnResult;
 import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
@@ -60,7 +58,7 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     if (OS.getCurrent() != OS.DARWIN) {
       return false;
     }
-    if (!ProcessWrapperUtil.isSupported(cmdEnv)) {
+    if (!ProcessWrapperRunner.isSupported(cmdEnv)) {
       return false;
     }
 
@@ -107,8 +105,8 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     this.execRoot = cmdEnv.getExecRoot();
     this.allowNetwork = SandboxHelpers.shouldAllowNetwork(cmdEnv.getOptions());
     this.productName = productName;
-    this.alwaysWritableDirs = getAlwaysWritableDirs(cmdEnv.getRuntime().getFileSystem());
-    this.processWrapper = ProcessWrapperUtil.getProcessWrapper(cmdEnv);
+    this.alwaysWritableDirs = getAlwaysWritableDirs(cmdEnv.getDirectories().getFileSystem());
+    this.processWrapper = ProcessWrapperRunner.getProcessWrapper(cmdEnv);
     this.localEnvProvider = new XCodeLocalEnvProvider();
     this.timeoutGraceSeconds = timeoutGraceSeconds;
   }
@@ -130,17 +128,15 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     HashSet<Path> writableDirs = new HashSet<>();
 
     addPathToSetIfExists(fs, writableDirs, "/dev");
+    addPathToSetIfExists(fs, writableDirs, System.getenv("TMPDIR"));
     addPathToSetIfExists(fs, writableDirs, "/tmp");
     addPathToSetIfExists(fs, writableDirs, "/private/tmp");
     addPathToSetIfExists(fs, writableDirs, "/private/var/tmp");
 
-    // On macOS, processes may write to not only $TMPDIR but also to two other temporary
-    // directories. We have to get their location by calling "getconf".
+    // On macOS, in addition to what is specified in $TMPDIR, two other temporary directories may be
+    // written to by processes. We have to get their location by calling "getconf".
     addPathToSetIfExists(fs, writableDirs, getConfStr("DARWIN_USER_TEMP_DIR"));
     addPathToSetIfExists(fs, writableDirs, getConfStr("DARWIN_USER_CACHE_DIR"));
-    // We don't add any value for $TMPDIR here, instead we compute its value later in
-    // {@link #actuallyExec} and add it as a writable directory in
-    // {@link AbstractSandboxSpawnRunner#getWritableDirs}.
 
     // ~/Library/Cache and ~/Library/Logs need to be writable (cf. issue #2231).
     Path homeDir = fs.getPath(System.getProperty("user.home"));
@@ -177,16 +173,11 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     Path sandboxPath = getSandboxRoot();
     Path sandboxExecRoot = sandboxPath.getRelative("execroot").getRelative(execRoot.getBaseName());
 
-    // Each sandboxed action runs in its own execroot, so we don't need to make the temp directory's
-    // name unique (like we have to with standalone execution strategy).
-    Path tmpDir = sandboxExecRoot.getRelative("tmp");
-
     Map<String, String> spawnEnvironment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir, productName);
+        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, productName);
 
     final HashSet<Path> writableDirs = new HashSet<>(alwaysWritableDirs);
-    ImmutableSet<Path> extraWritableDirs =
-        getWritableDirs(sandboxExecRoot, spawnEnvironment, tmpDir);
+    ImmutableSet<Path> extraWritableDirs = getWritableDirs(sandboxExecRoot, spawnEnvironment);
     writableDirs.addAll(extraWritableDirs);
 
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
@@ -196,9 +187,9 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     List<String> arguments =
         computeCommandLine(spawn, timeout, sandboxConfigPath, timeoutGraceSeconds);
     Map<String, String> environment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir, productName);
+        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, productName);
 
-    boolean allowNetworkForThisSpawn = allowNetwork || Spawns.requiresNetwork(spawn);
+    boolean allowNetworkForThisSpawn = allowNetwork || SandboxHelpers.shouldAllowNetwork(spawn);
     SandboxedSpawn sandbox = new SymlinkedSandboxedSpawn(
         sandboxPath,
         sandboxExecRoot,
@@ -214,7 +205,7 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
             sandboxConfigPath, writableDirs, getInaccessiblePaths(), allowNetworkForThisSpawn);
       }
     };
-    return runSpawn(spawn, sandbox, policy, execRoot, tmpDir, timeout);
+    return runSpawn(spawn, sandbox, policy, execRoot, timeout);
   }
 
   private List<String> computeCommandLine(
@@ -224,12 +215,8 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     commandLineArgs.add("-f");
     commandLineArgs.add(sandboxConfigPath.getPathString());
     commandLineArgs.addAll(
-        ProcessWrapperUtil.commandLineBuilder()
-            .setProcessWrapperPath(processWrapper.getPathString())
-            .setCommandArguments(spawn.getArguments())
-            .setTimeout(timeout)
-            .setKillDelay(Duration.ofSeconds(timeoutGraceSeconds))
-            .build());
+        ProcessWrapperRunner.getCommandLine(
+            processWrapper, spawn.getArguments(), timeout, timeoutGraceSeconds));
     return commandLineArgs;
   }
 

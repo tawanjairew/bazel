@@ -14,14 +14,11 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Verify;
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.stream.Stream;
 
 /**
  * Represents one of the following:
@@ -43,10 +40,9 @@ public abstract class PackageSpecification {
   private static final String PACKAGE_LABEL = "__pkg__";
   private static final String SUBTREE_LABEL = "__subpackages__";
   private static final String ALL_BENEATH_SUFFIX = "/...";
-  private static final String NEGATIVE_PREFIX = "-";
 
   /** Returns {@code true} if the package spec includes the provided {@code packageName}. */
-  protected abstract boolean containsPackage(PackageIdentifier packageName);
+  public abstract boolean containsPackage(PackageIdentifier packageName);
 
   /**
    * Returns a {@link String} representation of the {@link PackageSpecification} of the same format
@@ -55,12 +51,7 @@ public abstract class PackageSpecification {
    * <p>The returned {@link String} is insensitive to the {@link RepositoryName} associated with the
    * {@link PackageSpecification}.
    */
-  protected abstract String toStringWithoutRepository();
-
-  /** Returns {@code true} if the package specification represents a negated match. */
-  protected boolean negative() {
-    return false;
-  }
+  public abstract String toStringWithoutRepository();
 
   /**
    * Parses the provided {@link String} into a {@link PackageSpecification}.
@@ -85,18 +76,6 @@ public abstract class PackageSpecification {
    * <p>Throws {@link InvalidPackageSpecificationException} if the {@link String} cannot be parsed.
    */
   public static PackageSpecification fromString(RepositoryName repositoryName, String spec)
-      throws InvalidPackageSpecificationException {
-    String result = spec;
-    boolean negative = false;
-    if (result.startsWith(NEGATIVE_PREFIX)) {
-      negative = true;
-      result = result.substring(NEGATIVE_PREFIX.length());
-    }
-    PackageSpecification packageSpecification = fromStringPositive(repositoryName, result);
-    return negative ? new NegativePackageSpecification(packageSpecification) : packageSpecification;
-  }
-
-  private static PackageSpecification fromStringPositive(RepositoryName repositoryName, String spec)
       throws InvalidPackageSpecificationException {
     String result = spec;
     boolean allBeneath = false;
@@ -167,12 +146,12 @@ public abstract class PackageSpecification {
     }
 
     @Override
-    protected boolean containsPackage(PackageIdentifier packageName) {
+    public boolean containsPackage(PackageIdentifier packageName) {
       return this.singlePackageName.equals(packageName);
     }
 
     @Override
-    protected String toStringWithoutRepository() {
+    public String toStringWithoutRepository() {
       return "//" + singlePackageName.getPackageFragment().getPathString();
     }
 
@@ -207,13 +186,13 @@ public abstract class PackageSpecification {
     }
 
     @Override
-    protected boolean containsPackage(PackageIdentifier packageName) {
+    public boolean containsPackage(PackageIdentifier packageName) {
       return packageName.getRepository().equals(prefix.getRepository())
           && packageName.getPackageFragment().startsWith(prefix.getPackageFragment());
     }
 
     @Override
-    protected String toStringWithoutRepository() {
+    public String toStringWithoutRepository() {
       return "//" + prefix.getPackageFragment().getPathString() + ALL_BENEATH_SUFFIX;
     }
 
@@ -243,61 +222,17 @@ public abstract class PackageSpecification {
     }
   }
 
-  /** A package specification for a negative match, e.g. {@code -//pkg/sub/...}. */
-  private static class NegativePackageSpecification extends PackageSpecification {
-
-    private final PackageSpecification delegate;
-
-    private NegativePackageSpecification(PackageSpecification delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    protected boolean negative() {
-      return true;
-    }
-
-    @Override
-    protected boolean containsPackage(PackageIdentifier packageName) {
-      return delegate.containsPackage(packageName);
-    }
-
-    @Override
-    protected String toStringWithoutRepository() {
-      return "-" + delegate.toStringWithoutRepository();
-    }
-
-    @Override
-    public int hashCode() {
-      return delegate.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      return obj instanceof NegativePackageSpecification
-          && delegate.equals(((NegativePackageSpecification) obj).delegate);
-    }
-
-    @Override
-    public String toString() {
-      return "-" + delegate;
-    }
-  }
-
   private static class AllPackages extends PackageSpecification {
 
     private static final PackageSpecification EVERYTHING = new AllPackages();
 
     @Override
-    protected boolean containsPackage(PackageIdentifier packageName) {
+    public boolean containsPackage(PackageIdentifier packageName) {
       return true;
     }
 
     @Override
-    protected String toStringWithoutRepository() {
+    public String toStringWithoutRepository() {
       return "//...";
     }
 
@@ -321,67 +256,6 @@ public abstract class PackageSpecification {
   static class InvalidPackageSpecificationException extends Exception {
     private InvalidPackageSpecificationException(String message) {
       super(message);
-    }
-  }
-
-  /**
-   * A collection of {@link PackageSpecification}s from a {@code package_group}, which supports
-   * testing a given package for containment (see {@link #containedPackages()}}.
-   */
-  @Immutable
-  public static final class PackageGroupContents {
-
-    private final ImmutableList<PackageSpecification> packageSpecifications;
-
-    private PackageGroupContents(ImmutableList<PackageSpecification> packageSpecifications) {
-      this.packageSpecifications = packageSpecifications;
-    }
-
-    /**
-     * Creates a {@link PackageGroupContents} representing a collection of {@link
-     * PackageSpecification}s.
-     */
-    public static PackageGroupContents create(
-        ImmutableList<PackageSpecification> packageSpecifications) {
-      return new PackageGroupContents(packageSpecifications);
-    }
-
-    /**
-     * Returns {@code true} if the package specifications include the provided {@code packageName}.
-     * That is, at least one positive package specification matches, and no negative package
-     * specifications match.
-     */
-    public boolean containsPackage(PackageIdentifier packageIdentifier) {
-      boolean match = false;
-      for (PackageSpecification p : packageSpecifications) {
-        if (p.containsPackage(packageIdentifier)) {
-          if (p.negative()) {
-            return false;
-          } else {
-            match = true;
-          }
-        }
-      }
-      return match;
-    }
-
-    /**
-     * Returns {@link String} representations of the component {@link PackageSpecification}s of the
-     * same format accepted by {@link #fromString}.
-     */
-    public Stream<String> containedPackages() {
-      return packageSpecifications.stream().map(PackageSpecification::toString);
-    }
-
-    /**
-     * Returns {@link String} representations of the component {@link PackageSpecification}s of the
-     * same format accepted by {@link #fromString}.
-     *
-     * <p>The returned {@link String}s are insensitive to the {@link RepositoryName} associated with
-     * the {@link PackageSpecification}.
-     */
-    public Stream<String> containedPackagesWithoutRepository() {
-      return packageSpecifications.stream().map(PackageSpecification::toStringWithoutRepository);
     }
   }
 }

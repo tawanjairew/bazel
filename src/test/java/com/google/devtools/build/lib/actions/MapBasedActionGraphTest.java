@@ -37,11 +37,9 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class MapBasedActionGraphTest {
-  private final ActionKeyContext actionKeyContext = new ActionKeyContext();
-
   @Test
   public void testSmoke() throws Exception {
-    MutableActionGraph actionGraph = new MapBasedActionGraph(actionKeyContext);
+    MutableActionGraph actionGraph = new MapBasedActionGraph();
     FileSystem fileSystem = new InMemoryFileSystem(BlazeClock.instance());
     Path path = fileSystem.getPath("/root/foo");
     Artifact output = new Artifact(path, Root.asDerivedRoot(path));
@@ -60,7 +58,7 @@ public class MapBasedActionGraphTest {
 
   @Test
   public void testNoActionConflictWhenUnregisteringSharedAction() throws Exception {
-    MutableActionGraph actionGraph = new MapBasedActionGraph(actionKeyContext);
+    MutableActionGraph actionGraph = new MapBasedActionGraph();
     FileSystem fileSystem = new InMemoryFileSystem(BlazeClock.instance());
     Path path = fileSystem.getPath("/root/foo");
     Artifact output = new Artifact(path, Root.asDerivedRoot(path));
@@ -74,7 +72,7 @@ public class MapBasedActionGraphTest {
   }
 
   private static class ActionRegisterer extends AbstractQueueVisitor {
-    private final MutableActionGraph graph = new MapBasedActionGraph(new ActionKeyContext());
+    private final MutableActionGraph graph = new MapBasedActionGraph();
     private final Artifact output;
     // Just to occasionally add actions that were already present.
     private final Set<Action> allActions = Sets.newConcurrentHashSet();

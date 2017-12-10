@@ -251,17 +251,9 @@ function assert_singlejar_works() {
     local -r javabase="${BAZEL_RUNFILES}/${runfiles_relative_javabase}"
   fi
 
-  mkdir -p "$pkg/jvm"
-  cat > "$pkg/jvm/BUILD" <<EOF
-package(default_visibility=["//visibility:public"])
-java_runtime_suite(name='suite', default=':runtime')
-java_runtime(name='runtime', java_home='$javabase')
-EOF
-
-
   # Set javabase to an absolute path.
   bazel build //$pkg/java/hello:hello //$pkg/java/hello:hello_deploy.jar \
-      "$stamp_arg" --javabase="//$pkg/jvm:suite" "$embed_label" >&"$TEST_log" \
+      "$stamp_arg" --javabase="$javabase" "$embed_label" >&"$TEST_log" \
       || fail "Build failed"
 
   mkdir $pkg/ugly/ || fail "mkdir failed"
@@ -270,7 +262,7 @@ EOF
   cp ${PRODUCT_NAME}-bin/$pkg/java/hello/hello_deploy.jar $pkg/ugly/
 
   $pkg/ugly/hello build.target build.time build.timestamp \
-      main.class=hello.Hello "$expected_build_data" >> $TEST_log 2>&1
+      main.class=hello.Hello "$expected_build_data" 2>&1 >>$TEST_log
   expect_log 'Hello, World!'
 }
 
@@ -635,23 +627,22 @@ EOF
 function test_jvm_flags_are_passed_verbatim() {
   local -r pkg="${FUNCNAME[0]}"
   mkdir -p $pkg/java/com/google/jvmflags || fail "mkdir"
-  cat >$pkg/java/com/google/jvmflags/BUILD <<EOF
+  cat >$pkg/java/com/google/jvmflags/BUILD <<'EOF'
 java_binary(
     name = 'foo',
     srcs = ['Foo.java'],
     main_class = 'com.google.jvmflags.Foo',
-    toolchains = ['${TOOLS_REPOSITORY}//tools/jdk:current_java_runtime'],
     jvm_flags = [
         # test quoting
-        '--a=\\'single_single\\'',
+        '--a=\'single_single\'',
         '--b="single_double"',
         "--c='double_single'",
-        "--d=\\"double_double\\"",
+        "--d=\"double_double\"",
         '--e=no_quotes',
         # no escaping expected
-        '--f=stuff\$\$to"escape\\\\',
+        '--f=stuff$$to"escape\\',
         # test make variable expansion
-        '--g=\$(JAVABASE)',
+        '--g=$(JAVABASE)',
     ],
 )
 EOF

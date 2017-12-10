@@ -14,17 +14,15 @@
 package com.google.devtools.build.android.desugar.testdata.java8;
 
 import com.google.common.collect.ImmutableList;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class ConcreteDefaultInterfaceWithLambda implements DefaultInterfaceWithLambda {
   static final String ONE = String.valueOf(1);
 
   @Override
-  public List<String> digits() {
+  public ImmutableList<String> digits() {
     return ImmutableList.of(0, 2)
         .stream()
         .map(i -> i == 0 ? ONE : String.valueOf(i))
-        .collect(Collectors.toList());
+        .collect(ImmutableList.toImmutableList());
   }
 }

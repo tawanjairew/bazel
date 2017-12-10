@@ -31,7 +31,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Test cases for {@link ExecutableSymlinkAction}. */
 @RunWith(JUnit4.class)
 public class ExecutableSymlinkActionTest {
   private Scratch scratch = new Scratch();
@@ -39,7 +38,6 @@ public class ExecutableSymlinkActionTest {
   private Root outputRoot;
   TestFileOutErr outErr;
   private Executor executor;
-  private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Before
   public final void createExecutor() throws Exception  {
@@ -47,7 +45,7 @@ public class ExecutableSymlinkActionTest {
     inputRoot = Root.asDerivedRoot(inputDir);
     outputRoot = Root.asDerivedRoot(scratch.dir("/out"));
     outErr = new TestFileOutErr();
-    executor = new DummyExecutor(scratch.getFileSystem(), inputDir);
+    executor = new DummyExecutor(inputDir);
   }
 
   private ActionExecutionContext createContext() {
@@ -56,11 +54,7 @@ public class ExecutableSymlinkActionTest {
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         ActionInputPrefetcher.NONE,
-        actionKeyContext,
-        null,
-        outErr,
-        ImmutableMap.<String, String>of(),
-        null);
+        null, outErr, ImmutableMap.<String, String>of(), null);
   }
 
   @Test
@@ -72,8 +66,7 @@ public class ExecutableSymlinkActionTest {
     Artifact input = new Artifact(inputFile, inputRoot);
     Artifact output = new Artifact(outputFile, outputRoot);
     ExecutableSymlinkAction action = new ExecutableSymlinkAction(NULL_ACTION_OWNER, input, output);
-    ActionResult actionResult = action.execute(createContext());
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(createContext());
     assertThat(outputFile.resolveSymbolicLinks()).isEqualTo(inputFile);
   }
 

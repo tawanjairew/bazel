@@ -48,7 +48,8 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
         "test",
         String.format(MultiArchSplitTransitionProvider.UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT,
             "meow_meow_os"),
-        "apple_binary(name = 'test', binary_type = 'dylib', platform_type = 'meow_meow_os')");
+        "apple_binary(name = 'test', binary_type = 'dylib', srcs = [ 'a.m' ], "
+            + "platform_type = 'meow_meow_os')");
   }
 
   @Test
@@ -113,6 +114,11 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
+  public void testNoSrcs() throws Exception {
+    checkNoSrcs(RULE_TYPE);
+  }
+
+  @Test
   public void testLipoBinaryAction() throws Exception {
     checkLipoBinaryAction(RULE_TYPE);
   }
@@ -130,6 +136,12 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testWatchSimulatorLipoAction() throws Exception {
     checkWatchSimulatorLipoAction(RULE_TYPE);
+  }
+
+  @Test
+  public void testLinkActionsWithSrcs() throws Exception {
+    checkLinkActionsWithSrcs(RULE_TYPE,
+        new ExtraLinkArgs("-dynamiclib"));
   }
 
   @Test
@@ -190,10 +202,5 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testMinimumOsDifferentTargets() throws Exception {
     checkMinimumOsDifferentTargets(RULE_TYPE, "_lipobin", "_bin");
-  }
-
-  @Test
-  public void testDrops32BitArchitecture() throws Exception {
-    verifyDrops32BitArchitecture(RULE_TYPE);
   }
 }

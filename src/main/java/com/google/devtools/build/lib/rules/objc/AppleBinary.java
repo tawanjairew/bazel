@@ -28,12 +28,12 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsProvider.OutputType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.MultiArchBinarySupport.DependencySpecificConfiguration;
-
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -138,7 +137,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
             childConfigurations,
             configToDepsCollectionMap,
             configurationToNonPropagatedObjcMap,
-            getDylibProviderTargets(ruleContext));
+            getDylibProviders(ruleContext),
+            getDylibProtoProviders(ruleContext));
 
     Map<String, NestedSet<Artifact>> outputGroupCollector = new TreeMap<>();
     multiArchBinarySupport.registerActions(
@@ -164,10 +164,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     objcProviderBuilder.add(MULTI_ARCH_LINKED_BINARIES, outputArtifact);
 
     ObjcProvider objcProvider = objcProviderBuilder.build();
-
-    if (appleConfiguration.shouldLinkingRulesPropagateObjc()) {
-      targetBuilder.addNativeDeclaredProvider(objcProvider);
-    }
+    // TODO(cparsons): Stop propagating ObjcProvider directly from this rule.
+    targetBuilder.addNativeDeclaredProvider(objcProvider);
 
     switch (getBinaryType(ruleContext)) {
       case EXECUTABLE:
@@ -258,12 +256,37 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     return new ExtraLinkArgs(extraLinkArgs.build());
   }
 
-  private static Iterable<TransitiveInfoCollection> getDylibProviderTargets(
-      RuleContext ruleContext) {
-    return ImmutableList.<TransitiveInfoCollection>builder()
-        .addAll(ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET))
-        .addAll(ruleContext.getPrerequisites(BUNDLE_LOADER_ATTR_NAME, Mode.TARGET))
-        .build();
+  private static Iterable<ObjcProvider> getDylibProviders(RuleContext ruleContext) {
+    ImmutableList.Builder<ObjcProvider> dylibProviders = ImmutableList.builder();
+    Iterable<AppleDynamicFrameworkProvider> frameworkProviders =
+        ruleContext.getPrerequisites(
+            DYLIBS_ATTR_NAME, Mode.TARGET, AppleDynamicFrameworkProvider.SKYLARK_CONSTRUCTOR);
+    for (AppleDynamicFrameworkProvider frameworkProvider : frameworkProviders) {
+      dylibProviders.add(frameworkProvider.getDepsObjcProvider());
+    }
+
+    ObjcProvider bundleLoaderObjcProvider =
+        ruleContext.getPrerequisite(
+            BUNDLE_LOADER_ATTR_NAME, Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR);
+
+    if (bundleLoaderObjcProvider != null) {
+      dylibProviders.add(bundleLoaderObjcProvider);
+    }
+    return dylibProviders.build();
+  }
+
+  private static Iterable<ObjcProtoProvider> getDylibProtoProviders(RuleContext ruleContext) {
+    Iterable<ObjcProtoProvider> dylibProtoProviders =
+        ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET, ObjcProtoProvider.class);
+
+    ObjcProtoProvider bundleLoaderObjcProtoProvider =
+        ruleContext.getPrerequisite(BUNDLE_LOADER_ATTR_NAME, Mode.TARGET, ObjcProtoProvider.class);
+
+    if (bundleLoaderObjcProtoProvider != null) {
+      dylibProtoProviders =
+          Iterables.concat(dylibProtoProviders, ImmutableList.of(bundleLoaderObjcProtoProvider));
+    }
+    return dylibProtoProviders;
   }
 
   private static Iterable<Artifact> getExtraLinkInputs(RuleContext ruleContext) {

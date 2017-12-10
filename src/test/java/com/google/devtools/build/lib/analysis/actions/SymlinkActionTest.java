@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_AC
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -73,19 +72,9 @@ public class SymlinkActionTest extends BuildViewTestCase {
 
   @Test
   public void testSymlink() throws Exception {
-    Executor executor = new TestExecutorBuilder(fileSystem, directories, null).build();
-    ActionResult actionResult =
-        action.execute(
-            new ActionExecutionContext(
-                executor,
-                null,
-                ActionInputPrefetcher.NONE,
-                actionKeyContext,
-                null,
-                null,
-                ImmutableMap.<String, String>of(),
-                null));
-    assertThat(actionResult.spawnResults()).isEmpty();
+    Executor executor = new TestExecutorBuilder(directories, null).build();
+    action.execute(new ActionExecutionContext(executor, null, ActionInputPrefetcher.NONE, null,
+        null, ImmutableMap.<String, String>of(), null));
     assertThat(output.isSymbolicLink()).isTrue();
     assertThat(output.resolveSymbolicLinks()).isEqualTo(input);
     assertThat(action.getPrimaryInput()).isEqualTo(inputArtifact);

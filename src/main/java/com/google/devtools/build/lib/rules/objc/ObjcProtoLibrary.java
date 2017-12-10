@@ -17,9 +17,9 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
@@ -31,8 +31,18 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(final RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    new ProtoAttributes(ruleContext).validate();
-    return createProtobufTarget(ruleContext);
+
+    ProtoAttributes attributes = new ProtoAttributes(ruleContext);
+    attributes.validate();
+
+    if (attributes.requiresProtobuf()) {
+      return createProtobufTarget(ruleContext);
+    } else {
+      ruleContext.ruleWarning("The usage of objc_proto_library without the portable_proto_filters "
+          + "attribute has been deprecated with a deadline to migrate set to June 30th. Please "
+          + "refer to b/37274743 for more information.");
+      return createProtocolBuffers2Target(ruleContext);
+    }
   }
 
   private ConfiguredTarget createProtobufTarget(RuleContext ruleContext)
@@ -43,7 +53,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoSourcesProvider.class);
 
     Iterable<ObjcProtoProvider> objcProtoProviders =
-        ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
+        ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProtoProvider.class);
 
     ProtobufSupport protoSupport =
         new ProtobufSupport(
@@ -85,5 +95,20 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     }
 
     return portableProtoFilters.build();
+  }
+
+  private ConfiguredTarget createProtocolBuffers2Target(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException {
+    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
+
+    ProtocolBuffers2Support protoSupport =
+        new ProtocolBuffers2Support(ruleContext)
+            .registerGenerationActions()
+            .registerCompilationActions()
+            .addFilesToBuild(filesToBuild);
+
+    return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
+        .addNativeDeclaredProvider(protoSupport.getObjcProvider())
+        .build();
   }
 }

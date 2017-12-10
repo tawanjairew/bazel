@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -25,11 +24,9 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
@@ -40,7 +37,6 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -60,6 +56,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -87,6 +84,33 @@ import javax.annotation.Nullable;
 public class CppCompileAction extends AbstractAction
     implements IncludeScannable, ExecutionInfoSpecifier, CommandAction {
 
+  /**
+   * Represents logic that determines if an artifact is a special input, meaning that it may require
+   * additional inputs when it is compiled or may not be available to other actions.
+   */
+  public interface SpecialInputsHandler {
+    /** Returns if {@code includedFile} is special, so may not be available to other actions. */
+    boolean isSpecialFile(Artifact includedFile);
+
+    /** Returns the set of files to be added for an included file (as returned in the .d file). */
+    Collection<Artifact> getInputsForIncludedFile(
+        Artifact includedFile, ArtifactResolver artifactResolver);
+  }
+
+  static final SpecialInputsHandler VOID_SPECIAL_INPUTS_HANDLER =
+      new SpecialInputsHandler() {
+        @Override
+        public boolean isSpecialFile(Artifact includedFile) {
+          return false;
+        }
+
+        @Override
+        public Collection<Artifact> getInputsForIncludedFile(
+            Artifact includedFile, ArtifactResolver artifactResolver) {
+          return ImmutableList.of();
+        }
+      };
+
   private static final PathFragment BUILD_PATH_FRAGMENT = PathFragment.create("BUILD");
 
   private static final int VALIDATION_DEBUG = 0;  // 0==none, 1==warns/errors, 2==all
@@ -98,9 +122,6 @@ public class CppCompileAction extends AbstractAction
 
   /** A string constant for the strip action name. */
   public static final String STRIP_ACTION_NAME = "strip";
-
-  /** A string constant for the linkstamp-compile action. */
-  public static final String LINKSTAMP_COMPILE = "linkstamp-compile";
 
   /**
    * A string constant for the c compilation action.
@@ -190,6 +211,7 @@ public class CppCompileAction extends AbstractAction
   @VisibleForTesting final CppConfiguration cppConfiguration;
   private final FeatureConfiguration featureConfiguration;
   protected final Class<? extends CppCompileActionContext> actionContext;
+  protected final SpecialInputsHandler specialInputsHandler;
   protected final CppSemantics cppSemantics;
 
   /**
@@ -219,7 +241,7 @@ public class CppCompileAction extends AbstractAction
 
   private CcToolchainFeatures.Variables overwrittenVariables = null;
 
-  private PathFragment gccToolPath;
+  private ImmutableList<Artifact> resolvedInputs = ImmutableList.<Artifact>of();
 
   /**
    * Creates a new action to compile C/C++ source files.
@@ -246,6 +268,7 @@ public class CppCompileAction extends AbstractAction
    * @param context the compilation context
    * @param actionContext TODO(bazel-team): Add parameter description.
    * @param coptsFilter regular expression to remove options from {@code copts}
+   * @param specialInputsHandler TODO(bazel-team): Add parameter description.
    * @param lipoScannables List of artifacts to include-scan when this action is a lipo action
    * @param additionalIncludeScannables list of additional artifacts to include-scan
    * @param actionClassId TODO(bazel-team): Add parameter description
@@ -278,6 +301,7 @@ public class CppCompileAction extends AbstractAction
       CppCompilationContext context,
       Class<? extends CppCompileActionContext> actionContext,
       Predicate<String> coptsFilter,
+      SpecialInputsHandler specialInputsHandler,
       Iterable<IncludeScannable> lipoScannables,
       ImmutableList<Artifact> additionalIncludeScannables,
       UUID actionClassId,
@@ -300,6 +324,7 @@ public class CppCompileAction extends AbstractAction
     this.outputFile = Preconditions.checkNotNull(outputFile);
     this.optionalSourceFile = optionalSourceFile;
     this.context = context;
+    this.specialInputsHandler = specialInputsHandler;
     this.cppConfiguration = cppConfiguration;
     this.featureConfiguration = featureConfiguration;
     // inputsKnown begins as the logical negation of shouldScanIncludes.
@@ -316,7 +341,6 @@ public class CppCompileAction extends AbstractAction
     this.compileCommandLine =
         CompileCommandLine.builder(
                 sourceFile,
-                outputFile,
                 coptsFilter,
                 actionName,
                 cppConfiguration,
@@ -339,7 +363,6 @@ public class CppCompileAction extends AbstractAction
     this.additionalIncludeScannables = ImmutableList.copyOf(additionalIncludeScannables);
     this.builtInIncludeDirectories =
         ImmutableList.copyOf(cppProvider.getBuiltInIncludeDirectories());
-    this.gccToolPath = cppProvider.getToolPathFragment(Tool.GCC);
   }
 
   /**
@@ -388,13 +411,18 @@ public class CppCompileAction extends AbstractAction
 
   /**
    * Returns the list of additional inputs found by dependency discovery, during action preparation,
-   * and clears the stored list. {@link Action#prepare} must be called before this method is called,
-   * on each action execution.
+   * and clears the stored list. {@link #prepare} must be called before this method is called, on
+   * each action execution.
    */
   public Iterable<Artifact> getAdditionalInputs() {
     Iterable<Artifact> result = Preconditions.checkNotNull(additionalInputs);
     additionalInputs = null;
     return result;
+  }
+
+  @VisibleForTesting
+  public void setResolvedInputsForTesting(ImmutableList<Artifact> resolvedInputs) {
+    this.resolvedInputs = resolvedInputs;
   }
 
   @Override
@@ -441,11 +469,12 @@ public class CppCompileAction extends AbstractAction
       }
       result.addTransitive(prunableInputs);
       additionalInputs = result.build();
-      return additionalInputs;
+      return result.build();
     }
 
+    Set<Artifact> initialResultSet = Sets.newLinkedHashSet(initialResult);
+
     if (shouldPruneModules) {
-      Set<Artifact> initialResultSet = Sets.newLinkedHashSet(initialResult);
       if (CppFileTypes.CPP_MODULE.matches(sourceFile.getFilename())) {
         usedModules = ImmutableSet.of(sourceFile);
         initialResultSet.add(sourceFile);
@@ -458,11 +487,26 @@ public class CppCompileAction extends AbstractAction
         }
         initialResultSet.addAll(usedModules);
       }
-      initialResult = initialResultSet;
     }
 
-    additionalInputs = initialResult;
-    return additionalInputs;
+    initialResult = initialResultSet;
+    this.additionalInputs = initialResult;
+    // In some cases, execution backends need extra files for each included file. Add them
+    // to the set of inputs the caller may need to be aware of.
+    Collection<Artifact> result = new HashSet<>();
+    ArtifactResolver artifactResolver =
+        actionExecutionContext.getContext(IncludeScanningContext.class).getArtifactResolver();
+    for (Artifact artifact : initialResult) {
+      result.addAll(specialInputsHandler.getInputsForIncludedFile(artifact, artifactResolver));
+    }
+    for (Artifact artifact : getInputs()) {
+      result.addAll(specialInputsHandler.getInputsForIncludedFile(artifact, artifactResolver));
+    }
+    // TODO(ulfjack): This only works if include scanning is enabled; the cleanup is in progress,
+    // and this needs to be fixed before we can even consider disabling it.
+    resolvedInputs = ImmutableList.copyOf(result);
+    Iterables.addAll(result, initialResult);
+    return Preconditions.checkNotNull(result);
   }
 
   @Override
@@ -618,7 +662,7 @@ public class CppCompileAction extends AbstractAction
   @Override
   public List<String> getCmdlineIncludes() {
     ImmutableList.Builder<String> cmdlineIncludes = ImmutableList.builder();
-    List<String> args = getArgv();
+    List<String> args = getArguments();
     for (Iterator<String> argi = args.iterator(); argi.hasNext();) {
       String arg = argi.next();
       if (arg.equals("-include") && argi.hasNext()) {
@@ -680,21 +724,9 @@ public class CppCompileAction extends AbstractAction
     return ImmutableMap.copyOf(environment);
   }
 
-  /**
-   * Returns a new, mutable list of command and arguments (argv) to be passed
-   * to the gcc subprocess.
-   */
-  public final List<String> getArgv() {
-    return getArgv(getInternalOutputFile());
-  }
-
   @Override
   public List<String> getArguments() {
-    return getArgv();
-  }
-
-  protected final List<String> getArgv(PathFragment outputFile) {
-    return compileCommandLine.getArgv(outputFile, overwrittenVariables);
+    return compileCommandLine.getArguments(overwrittenVariables);
   }
 
   @Override
@@ -705,9 +737,15 @@ public class CppCompileAction extends AbstractAction
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext) {
+  public boolean extraActionCanAttach() {
+    return cppConfiguration.alwaysAttachExtraActions()
+        || !specialInputsHandler.isSpecialFile(getPrimaryInput());
+  }
+
+  @Override
+  public ExtraActionInfo.Builder getExtraActionInfo() {
     CppCompileInfo.Builder info = CppCompileInfo.newBuilder();
-    info.setTool(gccToolPath.getPathString());
+    info.setTool(cppConfiguration.getToolPathFragment(Tool.GCC).getPathString());
     for (String option : getCompilerOptions()) {
       info.addCompilerOption(option);
     }
@@ -729,8 +767,7 @@ public class CppCompileAction extends AbstractAction
     }
 
     try {
-      return super.getExtraActionInfo(actionKeyContext)
-          .setExtension(CppCompileInfo.cppCompileInfo, info.build());
+      return super.getExtraActionInfo().setExtension(CppCompileInfo.cppCompileInfo, info.build());
     } catch (CommandLineExpansionException e) {
       throw new AssertionError("CppCompileAction command line expansion cannot fail.");
     }
@@ -783,6 +820,7 @@ public class CppCompileAction extends AbstractAction
       }
       allowedIncludes.add(input);
     }
+    allowedIncludes.addAll(resolvedInputs);
 
     if (optionalSourceFile != null) {
       allowedIncludes.add(optionalSourceFile);
@@ -1049,11 +1087,12 @@ public class CppCompileAction extends AbstractAction
   public ResourceSet estimateResourceConsumptionLocal() {
     // We use a local compile, so much of the time is spent waiting for IO,
     // but there is still significant CPU; hence we estimate 50% cpu usage.
-    return ResourceSet.createWithRamCpuIo(/*memoryMb=*/200, /*cpuUsage=*/0.5, /*ioUsage=*/0.0);
+    return ResourceSet.createWithRamCpuIo(
+        /* memoryMb= */ 200, /* cpuUsage= */ 0.5, /* ioUsage= */ 0.0);
   }
 
   @Override
-  public String computeKey(ActionKeyContext actionKeyContext) {
+  public String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addUUID(actionClassId);
     f.addStringMap(getEnvironment());
@@ -1066,10 +1105,10 @@ public class CppCompileAction extends AbstractAction
     // itself is fully determined by the input source files and module maps.
     // A better long-term solution would be to make the compiler to find them automatically and
     // never hand in the .pcm files explicitly on the command line in the first place.
-    f.addStrings(compileCommandLine.getArgv(getInternalOutputFile(), null));
+    f.addStrings(compileCommandLine.getArguments(/* overwrittenVariables= */ null));
 
     /*
-     * getArgv() above captures all changes which affect the compilation
+     * getArguments() above captures all changes which affect the compilation
      * command and hence the contents of the object file.  But we need to
      * also make sure that we reexecute the action if any of the fields
      * that affect whether validateIncludes() will report an error or warning
@@ -1077,19 +1116,27 @@ public class CppCompileAction extends AbstractAction
      */
     f.addPaths(context.getDeclaredIncludeDirs());
     f.addPaths(context.getDeclaredIncludeWarnDirs());
-    actionKeyContext.addArtifactsToFingerprint(f, context.getDeclaredIncludeSrcs());
+    for (Artifact declaredIncludeSrc : context.getDeclaredIncludeSrcs()) {
+      f.addPath(declaredIncludeSrc.getExecPath());
+    }
     f.addInt(0);  // mark the boundary between input types
-    actionKeyContext.addArtifactsToFingerprint(f, getMandatoryInputs());
+    for (Artifact input : getMandatoryInputs()) {
+      f.addPath(input.getExecPath());
+    }
     f.addInt(0);
-    actionKeyContext.addArtifactsToFingerprint(f, prunableInputs);
+    for (Artifact input : prunableInputs) {
+      f.addPath(input.getExecPath());
+    }
     return f.hexDigestAndReset();
   }
 
   @Override
   @ThreadCompatible
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException {
+  public void execute(
+      ActionExecutionContext actionExecutionContext)
+          throws ActionExecutionException, InterruptedException {
     setModuleFileFlags();
+
     CppCompileActionContext.Reply reply;
     ShowIncludesFilter showIncludesFilterForStdout = null;
     ShowIncludesFilter showIncludesFilterForStderr = null;
@@ -1101,15 +1148,9 @@ public class CppCompileAction extends AbstractAction
       actionExecutionContext.getFileOutErr().setOutputFilter(showIncludesFilterForStdout);
       actionExecutionContext.getFileOutErr().setErrorFilter(showIncludesFilterForStderr);
     }
-
-    List<SpawnResult> spawnResults;
     try {
-      CppCompileActionResult cppCompileActionResult =
-          actionExecutionContext
-              .getContext(actionContext)
-              .execWithReply(this, actionExecutionContext);
-      reply = cppCompileActionResult.contextReply();
-      spawnResults = cppCompileActionResult.spawnResults();
+      reply = actionExecutionContext.getContext(actionContext)
+          .execWithReply(this, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "C++ compilation of rule '" + getOwner().getLabel() + "'",
@@ -1150,7 +1191,6 @@ public class CppCompileAction extends AbstractAction
           actionExecutionContext.getArtifactExpander(),
           actionExecutionContext.getEventHandler());
     }
-    return ActionResult.create(spawnResults);
   }
 
   @VisibleForTesting
@@ -1170,6 +1210,7 @@ public class CppCompileAction extends AbstractAction
         new HeaderDiscovery.Builder()
             .setAction(this)
             .setSourceFile(getSourceFile())
+            .setSpecialInputsHandler(specialInputsHandler)
             .setDependencies(dependencies.build())
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
             .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
@@ -1192,6 +1233,7 @@ public class CppCompileAction extends AbstractAction
         new HeaderDiscovery.Builder()
             .setAction(this)
             .setSourceFile(getSourceFile())
+            .setSpecialInputsHandler(specialInputsHandler)
             .setDependencies(processDepset(execRoot, reply).getDependencies())
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
             .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
@@ -1294,9 +1336,9 @@ public class CppCompileAction extends AbstractAction
     message.append(getProgressMessage());
     message.append('\n');
     // Outputting one argument per line makes it easier to diff the results.
-    // The first element in getArgv() is actually the command to execute.
+    // The first element in getArguments() is actually the command to execute.
     String legend = "  Command: ";
-    for (String argument : ShellEscaper.escapeAll(getArgv())) {
+    for (String argument : ShellEscaper.escapeAll(getArguments())) {
       message.append(legend);
       message.append(argument);
       message.append('\n');

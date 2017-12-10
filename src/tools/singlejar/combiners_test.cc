@@ -20,6 +20,7 @@
 #include "gtest/gtest.h"
 
 namespace {
+using std::string;
 
 static const char kTag1Contents[] = "<tag1>Contents1</tag1>";
 static const char kTag2Contents[] = "<tag2>Contents2</tag2>";
@@ -86,7 +87,7 @@ TEST_F(CombinersTest, ConcatenatorSmall) {
   ASSERT_EQ(Z_STREAM_END, inflater.Inflate((buffer), sizeof(buffer)));
   EXPECT_EQ(kPoison, buffer[original_size]);
   EXPECT_EQ(kConcatenatedContents,
-            std::string(reinterpret_cast<char *>(buffer), original_size));
+            string(reinterpret_cast<char *>(buffer), original_size));
   free(reinterpret_cast<void *>(entry));
 
   // And if we just copy instead of compress:
@@ -97,9 +98,8 @@ TEST_F(CombinersTest, ConcatenatorSmall) {
   original_size = entry->uncompressed_file_size();
   compressed_size = entry->compressed_file_size();
   EXPECT_EQ(compressed_size, original_size);
-  EXPECT_EQ(
-      kConcatenatedContents,
-      std::string(reinterpret_cast<char *>(entry->data()), original_size));
+  EXPECT_EQ(kConcatenatedContents,
+            string(reinterpret_cast<char *>(entry->data()), original_size));
   EXPECT_TRUE(entry->file_name_is("concat"));
   EXPECT_EQ(0, entry->extra_fields_length());
   free(reinterpret_cast<void *>(entry));
@@ -175,7 +175,7 @@ TEST_F(CombinersTest, XmlCombiner) {
   ASSERT_EQ(Z_STREAM_END, inflater.Inflate((buffer), sizeof(buffer)));
   EXPECT_EQ(kPoison, buffer[original_size]);
   EXPECT_EQ(kCombinedXmlContents,
-            std::string(reinterpret_cast<char *>(buffer), original_size));
+            string(reinterpret_cast<char *>(buffer), original_size));
   free(reinterpret_cast<void *>(entry));
 
   // And for the combiner that just copies out:
@@ -186,9 +186,8 @@ TEST_F(CombinersTest, XmlCombiner) {
   original_size = entry->uncompressed_file_size();
   compressed_size = entry->compressed_file_size();
   EXPECT_EQ(compressed_size, original_size);
-  EXPECT_EQ(
-      kCombinedXmlContents,
-      std::string(reinterpret_cast<char *>(entry->data()), original_size));
+  EXPECT_EQ(kCombinedXmlContents,
+            string(reinterpret_cast<char *>(entry->data()), original_size));
   EXPECT_TRUE(entry->file_name_is("combined2.xml"));
   EXPECT_EQ(0, entry->extra_fields_length());
   free(reinterpret_cast<void *>(entry));
@@ -201,8 +200,7 @@ TEST_F(CombinersTest, PropertyCombiner) {
       "name_str=value_str\n";
   PropertyCombiner property_combiner("properties");
   property_combiner.AddProperty("name", "value");
-  property_combiner.AddProperty(std::string("name_str"),
-                                std::string("value_str"));
+  property_combiner.AddProperty(string("name_str"), string("value_str"));
 
   // Merge should not be called.
   ASSERT_FALSE(property_combiner.Merge(nullptr, nullptr));
@@ -227,7 +225,7 @@ TEST_F(CombinersTest, PropertyCombiner) {
   ASSERT_EQ(Z_STREAM_END, inflater.Inflate((buffer), sizeof(buffer)));
   EXPECT_EQ(kPoison, buffer[original_size]);
   EXPECT_EQ(kProperties,
-            std::string(reinterpret_cast<char *>(buffer), original_size));
+            string(reinterpret_cast<char *>(buffer), original_size));
   free(reinterpret_cast<void *>(entry));
 
   // Create output, verify Local Header contents.
@@ -238,12 +236,11 @@ TEST_F(CombinersTest, PropertyCombiner) {
   original_size = entry->uncompressed_file_size();
   compressed_size = entry->compressed_file_size();
   EXPECT_EQ(compressed_size, original_size);
-  EXPECT_EQ(
-      kProperties,
-      std::string(reinterpret_cast<char *>(entry->data()), original_size));
+  EXPECT_EQ(kProperties,
+            string(reinterpret_cast<char *>(entry->data()), original_size));
   EXPECT_EQ("properties", entry->file_name_string());
   EXPECT_EQ(0, entry->extra_fields_length());
   free(reinterpret_cast<void *>(entry));
 }
 
-}  // anonymous namespace
+}  // namespace

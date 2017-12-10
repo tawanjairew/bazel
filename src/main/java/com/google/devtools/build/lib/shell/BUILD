@@ -14,8 +14,6 @@ java_library(
     name = "shell",
     srcs = glob(["*.java"]),
     deps = [
-        "//src/main/protobuf:execution_statistics_java_proto",
-        "//third_party:auto_value",
         "//third_party:guava",
     ],
 )
@@ -26,12 +24,6 @@ load("//tools/build_rules:java_rules_skylark.bzl", "bootstrap_java_library")
 
 bootstrap_java_library(
     name = "shell-skylark",
-    srcs = glob(
-        ["*.java"],
-        exclude = ["ExecutionStatistics.java"],
-    ),
-    jars = [
-        "//third_party:auto_value-jars",
-        "//third_party:bootstrap_guava_and_error_prone-jars",
-    ],
+    srcs = glob(["*.java"]),
+    jars = ["//third_party:bootstrap_guava_and_error_prone-jars"],
 )

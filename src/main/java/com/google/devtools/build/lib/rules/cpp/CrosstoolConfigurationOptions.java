@@ -14,20 +14,16 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import javax.annotation.Nullable;
-
 /**
  * A container object which provides crosstool configuration options to the build.
  */
 public interface CrosstoolConfigurationOptions {
   /** Returns the CPU associated with this crosstool configuration. */
-  String getCpu();
+  public String getCpu();
 
   /** Returns the compiler associated with this crosstool configuration. */
-  @Nullable
-  String getCompiler();
+  public String getCompiler();
 
   /** Returns the libc version associated with this crosstool configuration. */
-  @Nullable
-  String getLibc();
+  public String getLibc();
 }

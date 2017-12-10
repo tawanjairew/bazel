@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.analysis.actions;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -25,9 +24,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
@@ -37,9 +34,9 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -154,7 +151,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     Spawn spawn;
 
@@ -170,7 +167,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
     // If the spawn does not have any output, it means the archive file contains nothing. In this
     // case we just return without generating anything under the output TreeArtifact.
     if (spawn.getOutputFiles().isEmpty()) {
-      return ActionResult.EMPTY;
+      return;
     }
 
     // Check spawn output TreeFileArtifact conflicts.
@@ -191,9 +188,8 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
     }
 
     // Execute the spawn.
-    List<SpawnResult> spawnResults;
     try {
-      spawnResults = getContext(actionExecutionContext).exec(spawn, actionExecutionContext);
+      getContext(actionExecutionContext).exec(spawn, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           getMnemonic() + " action failed for target: " + getOwner().getLabel(),
@@ -206,11 +202,10 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
       actionExecutionContext.getMetadataHandler().addExpandedTreeOutput(
           (TreeFileArtifact) fileEntry);
     }
-    return ActionResult.create(spawnResults);
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     f.addString(getMnemonic());

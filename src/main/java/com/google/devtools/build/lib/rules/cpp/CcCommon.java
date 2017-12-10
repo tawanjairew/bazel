@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
@@ -27,12 +26,11 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
@@ -54,6 +52,7 @@ import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
@@ -91,7 +90,6 @@ public final class CcCommon {
   private static final ImmutableSet<String> DEFAULT_FEATURES =
       ImmutableSet.of(
           CppRuleClasses.DEPENDENCY_FILE,
-          CppRuleClasses.COMPILE_ACTION_FLAGS_IN_FLAG_SET,
           CppRuleClasses.RANDOM_SEED,
           CppRuleClasses.MODULE_MAPS,
           CppRuleClasses.MODULE_MAP_HOME_CWD,
@@ -127,21 +125,21 @@ public final class CcCommon {
    */
   public ImmutableList<String> getLinkopts() {
     Preconditions.checkState(hasAttribute("linkopts", Type.STRING_LIST));
-    Iterable<String> ourLinkopts = ruleContext.attributes().get("linkopts", Type.STRING_LIST);
-    List<String> result;
+    List<String> ourLinkopts = ruleContext.attributes().get("linkopts", Type.STRING_LIST);
+    List<String> result = new ArrayList<>();
     if (ourLinkopts != null) {
-      boolean allowDashStatic =
-          !cppConfiguration.forceIgnoreDashStatic()
-              && (CppHelper.getDynamicMode(cppConfiguration, ccToolchain) != DynamicMode.FULLY);
-      if (!allowDashStatic) {
-        ourLinkopts = Iterables.filter(ourLinkopts, (v) -> !"-static".equals(v));
+      boolean allowDashStatic = !cppConfiguration.forceIgnoreDashStatic()
+          && (cppConfiguration.getDynamicMode() != DynamicMode.FULLY);
+      for (String linkopt : ourLinkopts) {
+        if (linkopt.equals("-static") && !allowDashStatic) {
+          continue;
+        }
+        CppHelper.expandAttribute(ruleContext, result, "linkopts", linkopt, true);
       }
-      result = CppHelper.expandLinkopts(ruleContext, "linkopts", ourLinkopts);
-    } else {
-      result = ImmutableList.of();
     }
 
-    if (ApplePlatform.isApplePlatform(ccToolchain.getTargetCpu()) && result.contains("-static")) {
+    if (ApplePlatform.isApplePlatform(cppConfiguration.getTargetCpu())
+        && result.contains("-static")) {
       ruleContext.attributeError(
           "linkopts", "Apple builds do not support statically linked binaries");
     }
@@ -150,6 +148,8 @@ public final class CcCommon {
   }
 
   public ImmutableList<String> getCopts() {
+    Preconditions.checkState(hasAttribute("copts", Type.STRING_LIST));
+
     if (!getCoptsFilter(ruleContext).apply("-Wno-future-warnings")) {
       ruleContext.attributeWarning(
           "nocopts",
@@ -162,8 +162,8 @@ public final class CcCommon {
     }
 
     return ImmutableList.<String>builder()
-        .addAll(CppHelper.getPackageCopts(ruleContext))
-        .addAll(CppHelper.getAttributeCopts(ruleContext))
+        .addAll(getPackageCopts(ruleContext))
+        .addAll(CppHelper.getAttributeCopts(ruleContext, "copts"))
         .build();
   }
 
@@ -190,6 +190,7 @@ public final class CcCommon {
     return compilationOutputs == null // Possible in LIPO collection mode (see initializationHook).
         ? DwoArtifactsCollector.emptyCollector()
         : DwoArtifactsCollector.transitiveCollector(
+            ruleContext,
             compilationOutputs,
             deps.build(),
             generateDwo,
@@ -333,6 +334,11 @@ public final class CcCommon {
     }
   }
 
+  private static ImmutableList<String> getPackageCopts(RuleContext ruleContext) {
+    List<String> unexpanded = ruleContext.getRule().getPackage().getDefaultCopts();
+    return ImmutableList.copyOf(CppHelper.expandMakeVariables(ruleContext, "copts", unexpanded));
+  }
+
   /** Returns copts filter built from the make variable expanded nocopts attribute. */
   Predicate<String> getCoptsFilter() {
     return getCoptsFilter(ruleContext);
@@ -352,7 +358,9 @@ public final class CcCommon {
     if (!ruleContext.getRule().isAttrDefined(NO_COPTS_ATTRIBUTE, Type.STRING)) {
       return null;
     }
-    String nocoptsAttr = ruleContext.getExpander().expand(NO_COPTS_ATTRIBUTE);
+    String nocoptsAttr =
+        ruleContext.expandMakeVariables(
+            NO_COPTS_ATTRIBUTE, ruleContext.attributes().get(NO_COPTS_ATTRIBUTE, Type.STRING));
     try {
       return Pattern.compile(nocoptsAttr);
     } catch (PatternSyntaxException e) {
@@ -387,10 +395,11 @@ public final class CcCommon {
    */
   public List<String> getDefines() {
     List<String> defines = new ArrayList<>();
-    for (String define : ruleContext.getExpander().list(DEFINES_ATTRIBUTE)) {
+    for (String define :
+      ruleContext.attributes().get(DEFINES_ATTRIBUTE, Type.STRING_LIST)) {
       List<String> tokens = new ArrayList<>();
       try {
-        ShellUtils.tokenize(tokens, define);
+        ShellUtils.tokenize(tokens, ruleContext.expandMakeVariables(DEFINES_ATTRIBUTE, define));
         if (tokens.size() == 1) {
           defines.add(tokens.get(0));
         } else if (tokens.isEmpty()) {
@@ -446,7 +455,8 @@ public final class CcCommon {
     List<PathFragment> result = new ArrayList<>();
     PackageIdentifier packageIdentifier = ruleContext.getLabel().getPackageIdentifier();
     PathFragment packageFragment = packageIdentifier.getPathUnderExecRoot();
-    for (String includesAttr : ruleContext.getExpander().list("includes")) {
+    for (String includesAttr : ruleContext.attributes().get("includes", Type.STRING_LIST)) {
+      includesAttr = ruleContext.expandMakeVariables("includes", includesAttr);
       if (includesAttr.startsWith("/")) {
         ruleContext.attributeWarning("includes",
             "ignoring invalid absolute path '" + includesAttr + "'");
@@ -522,13 +532,8 @@ public final class CcCommon {
    * @return mangled symlink artifact.
    */
   public Artifact getDynamicLibrarySymlink(Artifact library, boolean preserveName) {
-    return SolibSymlinkAction.getDynamicLibrarySymlink(
-        ruleContext,
-        ccToolchain.getSolibDirectory(),
-        library,
-        preserveName,
-        true,
-        ruleContext.getConfiguration());
+    return  SolibSymlinkAction.getDynamicLibrarySymlink(
+        ruleContext, library, preserveName, true, ruleContext.getConfiguration());
   }
 
   /**
@@ -537,12 +542,6 @@ public final class CcCommon {
   Iterable<Artifact> getLinkerScripts() {
     return FileType.filter(ruleContext.getPrerequisiteArtifacts("deps", Mode.TARGET).list(),
         CppFileTypes.LINKER_SCRIPT);
-  }
-
-  /** Returns the Windows DEF file specified in win_def_file attribute of the rule. */
-  @Nullable
-  Artifact getWinDefFile() {
-    return ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET);
   }
 
   /**
@@ -595,27 +594,12 @@ public final class CcCommon {
     }
     ImmutableSet<String> unsupportedFeatures = unsupportedFeaturesBuilder.build();
     ImmutableSet.Builder<String> requestedFeatures = ImmutableSet.builder();
-    // If STATIC_LINK_MSVCRT feature isn't specified by user, we add DYNAMIC_LINK_MSVCRT_* feature
-    // according to compilation mode.
-    // If STATIC_LINK_MSVCRT feature is specified, we add STATIC_LINK_MSVCRT_* feature
-    // according to compilation mode.
-    if (ruleContext.getFeatures().contains(CppRuleClasses.STATIC_LINK_MSVCRT)) {
-      requestedFeatures.add(
-          toolchain.getCompilationMode() == CompilationMode.DBG
-              ? CppRuleClasses.STATIC_LINK_MSVCRT_DEBUG
-              : CppRuleClasses.STATIC_LINK_MSVCRT_NO_DEBUG);
-    } else {
-      requestedFeatures.add(
-          toolchain.getCompilationMode() == CompilationMode.DBG
-              ? CppRuleClasses.DYNAMIC_LINK_MSVCRT_DEBUG
-              : CppRuleClasses.DYNAMIC_LINK_MSVCRT_NO_DEBUG);
-    }
     for (String feature :
         Iterables.concat(
             ImmutableSet.of(
                 toolchain.getCompilationMode().toString(), getHostOrNonHostFeature(ruleContext)),
             DEFAULT_FEATURES,
-            toolchain.getFeatures().getDefaultFeaturesAndActionConfigs(),
+            toolchain.getFeatures().getDefaultFeatures(),
             ruleContext.getFeatures())) {
       if (!unsupportedFeatures.contains(feature)) {
         requestedFeatures.add(feature);
@@ -707,17 +691,19 @@ public final class CcCommon {
       return null;
     }
 
-    Variables buildVariables = toolchainProvider.getBuildVariables();
+    Variables buildVariables = new Variables.Builder()
+        .addAllStringVariables(toolchainProvider.getBuildVariables())
+        .build();
     String toolchainCcFlags =
         Joiner.on(" ")
             .join(
                 featureConfiguration.getCommandLine(
                     CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME, buildVariables));
     String oldCcFlags = "";
-    TemplateVariableInfo templateVariableInfo =
-        toolchain.get(TemplateVariableInfo.PROVIDER);
-    if (templateVariableInfo != null) {
-      oldCcFlags = templateVariableInfo.getVariables().getOrDefault(
+    MakeVariableInfo makeVariableInfo =
+        toolchain.get(MakeVariableInfo.PROVIDER);
+    if (makeVariableInfo != null) {
+      oldCcFlags = makeVariableInfo.getMakeVariables().getOrDefault(
           CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME, "");
     }
     return FluentIterable.of(oldCcFlags)

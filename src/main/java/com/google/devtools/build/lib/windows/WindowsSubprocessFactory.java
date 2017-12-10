@@ -52,13 +52,7 @@ public class WindowsSubprocessFactory implements SubprocessFactory {
 
     long nativeProcess =
         WindowsProcesses.createProcess(
-            argv0,
-            argvRest,
-            env,
-            builder.getWorkingDirectory().getPath(),
-            stdoutPath,
-            stderrPath,
-            builder.redirectErrorStream());
+            argv0, argvRest, env, builder.getWorkingDirectory().getPath(), stdoutPath, stderrPath);
     String error = WindowsProcesses.processGetLastError(nativeProcess);
     if (!error.isEmpty()) {
       WindowsProcesses.deleteProcess(nativeProcess);

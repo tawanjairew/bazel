@@ -129,6 +129,11 @@ function atexit() {
   ATEXIT_HANDLERS="${ATEXIT_HANDLERS} ${handler}"
 }
 
+function restore_saved_path() {
+  export PATH=$BAZEL_OLD_PATH
+  export BAZEL_OLD_PATH=
+}
+
 # Exit routine to run all registered atexit handlers.
 #
 # If the program exited with an error, this exit routine will also exit with the
@@ -161,7 +166,9 @@ function tempdir() {
   local DIR="$(mktemp -d "${tmp%%/}/bazel_XXXXXXXX")"
   mkdir -p "${DIR}"
   local DIRBASE=$(basename "${DIR}")
-  eval "cleanup_tempdir_${DIRBASE}() { rm -rf '${DIR}' >&/dev/null || true ; }"
+  # TODO(laszlocsomor): Remove the "[ -n ... ] && echo ... ;" part from the
+  # following command after we fixed https://github.com/bazelbuild/bazel/issues/3618.
+  eval "cleanup_tempdir_${DIRBASE}() { [ -n \"\$TEST_TMPDIR\" ] && echo \"DEBUG[$0 (\$(date))] deleting ($DIR)\" ; rm -rf '${DIR}' >&/dev/null || true ; }"
   atexit cleanup_tempdir_${DIRBASE}
   NEW_TMPDIR="${DIR}"
 }
@@ -176,6 +183,7 @@ function cleanup_phasefile() {
 }
 
 atexit cleanup_phasefile
+atexit restore_saved_path
 
 # Excutes a command respecting the current verbosity settings.
 #
@@ -228,11 +236,7 @@ function new_step() {
   else
     new_line="\n"
   fi
-  if [ -t 2 ]; then
-    display -n "$new_line$LEAVES  $1"
-  else
-    display -n "$new_line$1"
-  fi
+  display -n "$new_line$LEAVES  $1"
 }
 
 function git_sha1() {
@@ -287,8 +291,8 @@ function get_java_version() {
     || fail "JAVA_HOME ($JAVA_HOME) is not a path to a working JDK."
 
   JAVAC_VERSION=$("${JAVAC}" -version 2>&1)
-  if [[ "$JAVAC_VERSION" =~ javac\ ((1\.)?([789]|[1-9][0-9])).*$ ]]; then
-    JAVAC_VERSION=1.${BASH_REMATCH[3]}
+  if [[ "$JAVAC_VERSION" =~ javac\ (1\.([789]|[1-9][0-9])).*$ ]]; then
+    JAVAC_VERSION=${BASH_REMATCH[1]}
   else
     fail \
       "Cannot determine JDK version, please set \$JAVA_HOME.\n" \

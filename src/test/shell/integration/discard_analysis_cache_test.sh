@@ -105,12 +105,9 @@ load("//foo:simpleaspect.bzl", "simple_rule")
 simple_rule(name = "foo", srcs = [":dep"])
 simple_rule(name = "dep", srcs = [])
 EOF
-  server_pid="$(bazel info server_pid 2>> "$TEST_log")"
-  echo "server_pid is ${server_pid}" >> "$TEST_log"
-  bazel build //foo:foo >> "$TEST_log" 2>&1 || fail "Expected success"
-  new_server_pid="$(bazel info server_pid 2>> "$TEST_log")"
-  [[ "$server_pid" == "$new_server_pid" ]] \
-      || fail "unequal pids: $server_pid, $new_server_pid"
+  server_pid="$(bazel info server_pid 2> /dev/null)"
+  bazel build //foo:foo >& "$TEST_log" \
+      || fail "Expected success"
   "$bazel_javabase"/bin/jmap -histo:live "$server_pid" > histo.txt
   cat histo.txt >> "$TEST_log"
   ct_count="$(extract_histogram_count histo.txt 'RuleConfiguredTarget$')"

@@ -16,12 +16,11 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import javax.annotation.Nullable;
 
 /** Description of the tools Blaze needs from an Android SDK. */
@@ -34,7 +33,6 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
       Artifact frameworkAidl,
       @Nullable TransitiveInfoCollection aidlLib,
       Artifact androidJar,
-      @Nullable Artifact sourceProperties,
       Artifact shrinkedAndroidJar,
       Artifact annotationsJar,
       Artifact mainDexClasses,
@@ -54,7 +52,6 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
         frameworkAidl,
         aidlLib,
         androidJar,
-        sourceProperties,
         shrinkedAndroidJar,
         annotationsJar,
         mainDexClasses,
@@ -84,13 +81,16 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
   }
 
   /**
-   * Throws an error if the Android SDK cannot be found.
+   * Signals an error if the Android SDK cannot be found.
    */
-  public static void verifyPresence(RuleContext ruleContext) throws RuleErrorException {
+  public static boolean verifyPresence(RuleContext ruleContext) {
     if (fromRuleContext(ruleContext) == null) {
-      throw ruleContext.throwWithRuleError(
+      ruleContext.ruleError(
           "No Android SDK found. Use the --android_sdk command line option to specify one.");
+      return false;
     }
+
+    return true;
   }
 
   /** The value of build_tools_version. May be null or empty. */
@@ -102,9 +102,6 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
   public abstract TransitiveInfoCollection getAidlLib();
 
   public abstract Artifact getAndroidJar();
-
-  @Nullable
-  public abstract Artifact getSourceProperties();
 
   public abstract Artifact getShrinkedAndroidJar();
 

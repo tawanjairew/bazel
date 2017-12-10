@@ -14,7 +14,7 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -40,8 +40,7 @@ public class PathCodec implements ObjectCodec<Path> {
   }
 
   @Override
-  public void serialize(Path path, CodedOutputStream codedOut)
-      throws IOException, SerializationException {
+  public void serialize(Path path, CodedOutputStream codedOut) throws IOException {
     Preconditions.checkState(
         path.getFileSystem() == fileSystem,
         "Path's FileSystem (%s) did not match the configured FileSystem (%s)",
@@ -51,8 +50,7 @@ public class PathCodec implements ObjectCodec<Path> {
   }
 
   @Override
-  public Path deserialize(CodedInputStream codedIn)
-      throws IOException, SerializationException {
+  public Path deserialize(CodedInputStream codedIn) throws IOException {
     PathFragment pathFragment = pathFragmentCodec.deserialize(codedIn);
     return fileSystem.getPath(pathFragment);
   }

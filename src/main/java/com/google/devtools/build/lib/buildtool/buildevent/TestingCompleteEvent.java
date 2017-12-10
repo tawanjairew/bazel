@@ -14,10 +14,16 @@
 
 package com.google.devtools.build.lib.buildtool.buildevent;
 
+import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
+
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.buildeventstream.BuildCompletingEvent;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
+import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.util.ExitCode;
+import java.util.Collection;
 
 /**
  * Event triggered after testing has completed.
@@ -25,7 +31,11 @@ import com.google.devtools.build.lib.util.ExitCode;
  * <p>This event is used by the BEP to construct the {@link BuildEventStreamProtos.BuildFinished}
  * event when the test command is used.
  */
-public class TestingCompleteEvent extends BuildCompletingEvent {
+public class TestingCompleteEvent implements BuildEvent {
+
+  private final ExitCode exitCode;
+  private final long finishTimeMillis;
+
   /**
    * Creates a new {@link TestingCompleteEvent}.
    *
@@ -33,6 +43,34 @@ public class TestingCompleteEvent extends BuildCompletingEvent {
    * @param finishTimeMillis the finish time in milliseconds since the epoch.
    */
   public TestingCompleteEvent(ExitCode exitCode, long finishTimeMillis) {
-    super(exitCode, finishTimeMillis, ImmutableList.of(BuildEventId.buildToolLogs()));
+    this.exitCode = checkNotNull(exitCode);
+    this.finishTimeMillis = finishTimeMillis;
+  }
+
+  @Override
+  public BuildEventId getEventId() {
+    return BuildEventId.buildFinished();
+  }
+
+  @Override
+  public Collection<BuildEventId> getChildrenEvents() {
+    return ImmutableList.of();
+  }
+
+  @Override
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
+    BuildEventStreamProtos.BuildFinished.ExitCode protoExitCode =
+        BuildEventStreamProtos.BuildFinished.ExitCode.newBuilder()
+            .setName(exitCode.name())
+            .setCode(exitCode.getNumericExitCode())
+            .build();
+
+    BuildEventStreamProtos.BuildFinished finished =
+        BuildEventStreamProtos.BuildFinished.newBuilder()
+            .setOverallSuccess(ExitCode.SUCCESS.equals(exitCode))
+            .setExitCode(protoExitCode)
+            .setFinishTimeMillis(finishTimeMillis)
+            .build();
+    return GenericBuildEvent.protoChaining(this).setFinished(finished).build();
   }
 }

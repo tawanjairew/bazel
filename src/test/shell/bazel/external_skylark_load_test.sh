@@ -98,6 +98,12 @@ function test_load_skylark_from_external_repo_with_pkg_relative_label_load() {
   run_external_skylark_load_test ":external_constants.bzl" "EXTERNAL!"
 }
 
+# A relative path should be resolved relative to the current (external)
+# directory.
+function test_load_skylark_from_external_repo_with_pkg_relative_path_load() {
+  run_external_skylark_load_test "external_constants" "EXTERNAL!"
+}
+
 # An absolute label with no repo prefix should be resolved relative to the
 # current (external) repo.
 function test_load_skylark_from_external_repo_with_pkg_relative_path_load() {
@@ -109,6 +115,12 @@ function test_load_skylark_from_external_repo_with_pkg_relative_path_load() {
 # relative to the default repo.
 function test_load_skylark_from_external_repo_with_repo_relative_label_load() {
   run_external_skylark_load_test "@//another_local_pkg:local_constants.bzl" \
+    "LOCAL!"
+}
+
+# An absolute path should always be resolved in the default repo.
+function test_load_skylark_from_external_repo_with_repo_relative_label_load() {
+  run_external_skylark_load_test "/another_local_pkg/local_constants" \
     "LOCAL!"
 }
 

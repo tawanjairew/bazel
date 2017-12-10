@@ -19,7 +19,7 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.common.truth.FailureMetadata;
+import com.google.common.truth.FailureStrategy;
 import com.google.common.truth.Subject;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -38,8 +38,8 @@ import javax.annotation.Nullable;
  */
 public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
 
-  ClassPathsSubject(FailureMetadata failureMetadata, @Nullable Path subject) {
-    super(failureMetadata, subject);
+  ClassPathsSubject(FailureStrategy failureStrategy, @Nullable Path subject) {
+    super(failureStrategy, subject);
   }
 
   void exists() {
@@ -113,25 +113,17 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
       fail("should not be null.");
     }
     exists();
-    return check().about(ClassNameSubject.classNames(getSubject())).that(className);
+    return new ClassNameSubject(failureStrategy, getSubject(), className);
   }
 
   static final class ClassNameSubject extends Subject<ClassNameSubject, String> {
 
     private final Path basePath;
 
-    public ClassNameSubject(FailureMetadata failureMetadata, Path basePath, String subject) {
-      super(failureMetadata, subject);
+    public ClassNameSubject(
+        FailureStrategy failureStrategy, Path basePath, String subject) {
+      super(failureStrategy, subject);
       this.basePath = basePath;
-    }
-
-    static Subject.Factory<ClassNameSubject, String> classNames(Path basePath) {
-      return new Subject.Factory<ClassNameSubject, String>() {
-        @Override
-        public ClassNameSubject createSubject(FailureMetadata metadata, String actual) {
-          return new ClassNameSubject(metadata, basePath, actual);
-        }
-      };
     }
 
     public void classContentsIsEqualTo(

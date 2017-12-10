@@ -43,11 +43,12 @@ public final class ShutdownCommand implements BlazeCommand {
       name = "iff_heap_size_greater_than",
       defaultValue = "0",
       category = "misc",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE, OptionEffectTag.EAGERNESS_TO_EXIT},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
-          "Iff non-zero, then shutdown will only shut down the server if the total memory (in MB) "
-              + "consumed by the JVM exceeds this value."
+          "Iff non-zero, then shutdown will only shut down the "
+              + "server if the total memory (in MB) consumed by the JVM "
+              + "exceeds this value."
     )
     public int heapSizeLimit;
   }

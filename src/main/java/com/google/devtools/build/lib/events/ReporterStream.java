@@ -14,7 +14,7 @@
 
 package com.google.devtools.build.lib.events;
 
-import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.OutputStream;
 import java.util.Arrays;
 

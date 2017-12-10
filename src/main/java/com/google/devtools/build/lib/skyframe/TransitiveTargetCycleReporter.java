@@ -53,7 +53,7 @@ class TransitiveTargetCycleReporter extends AbstractLabelCycleReporter {
 
   @Override
   protected Label getLabel(SkyKey key) {
-    return ((TransitiveTargetKey) key).getLabel();
+    return (Label) key.argument();
   }
 
   @Override

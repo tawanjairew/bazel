@@ -1,12 +1,15 @@
 package org.checkerframework.dataflow.cfg.node;
 
-import com.sun.source.tree.ThrowTree;
-import com.sun.source.tree.Tree;
 import java.util.Collection;
 import java.util.Collections;
+
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.Types;
+
 import org.checkerframework.dataflow.util.HashCodeUtils;
+
+import com.sun.source.tree.ThrowTree;
+import com.sun.source.tree.Tree;
 
 /**
  * A node for exception throws:
@@ -17,13 +20,15 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
  *
  * @author Stefan Heule
  * @author Charlie Garrett
+ *
  */
 public class ThrowNode extends Node {
 
     protected ThrowTree tree;
     protected Node expression;
 
-    public ThrowNode(ThrowTree tree, Node expression, Types types) {
+    public ThrowNode(ThrowTree tree,
+            Node expression, Types types) {
         super(types.getNoType(TypeKind.NONE));
         this.tree = tree;
         this.expression = expression;

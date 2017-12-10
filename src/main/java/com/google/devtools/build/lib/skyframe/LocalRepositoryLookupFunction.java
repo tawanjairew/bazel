@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
-import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.ErrorDeterminingRepositoryException;
 import com.google.devtools.build.lib.packages.Package;
@@ -96,7 +95,7 @@ public class LocalRepositoryLookupFunction implements SkyFunction {
               directory.getRoot(),
               directory
                   .getRelativePath()
-                  .getRelative(BuildFileName.WORKSPACE.getFilenameFragment()));
+                  .getRelative(PackageLookupValue.BuildFileName.WORKSPACE.getFilenameFragment()));
       FileValue workspaceFileValue =
           (FileValue)
               env.getValueOrThrow(

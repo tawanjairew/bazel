@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.Path;
@@ -165,19 +164,6 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
               public SkyValue answer(InvocationOnMock invocation) throws Throwable {
                 SkyKey key = (SkyKey) invocation.getArguments()[0];
                 return astSkyFunc.compute(key, getEnv());
-              }
-            });
-    Mockito.when(env.getValue(Matchers.argThat(new SkyKeyMatchers(SkyFunctions.PRECOMPUTED))))
-        .then(
-            new Answer<SkyValue>() {
-              @Override
-              public SkyValue answer(InvocationOnMock invocation) throws Throwable {
-                SkyKey key = (SkyKey) invocation.getArguments()[0];
-                if (key.equals(PrecomputedValue.SKYLARK_SEMANTICS.getKeyForTesting())) {
-                  return new PrecomputedValue(SkylarkSemantics.DEFAULT_SEMANTICS);
-                } else {
-                  return null;
-                }
               }
             });
     return env;

@@ -84,7 +84,6 @@ public final class BazelFilegroupRule implements RuleDefinition {
             attr("path", STRING)
                 .undocumented(
                     "only used to expose FilegroupPathProvider, which is not currently used"))
-        .supportsPlatforms(false)
         .build();
   }
 

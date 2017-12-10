@@ -17,8 +17,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 /**
@@ -84,6 +82,16 @@ public final class SimpleSpawn implements Spawn {
   }
 
   @Override
+  public boolean hasNoSandbox() {
+    return executionInfo.containsKey("nosandbox");
+  }
+
+  @Override
+  public boolean isRemotable() {
+    return !executionInfo.containsKey("local");
+  }
+
+  @Override
   public final ImmutableMap<String, String> getExecutionInfo() {
     return executionInfo;
   }
@@ -136,11 +144,5 @@ public final class SimpleSpawn implements Spawn {
   @Override
   public String getMnemonic() {
     return owner.getMnemonic();
-  }
-
-  @Override
-  @Nullable
-  public PlatformInfo getExecutionPlatform() {
-    return null;
   }
 }

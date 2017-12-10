@@ -16,10 +16,9 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.NativeInfo;
-import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -39,14 +38,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  * all the time (whether protos are used or not), the dependency is specified on objc_proto_library
  * instead.
  */
-public class ObjcProtoProvider extends NativeInfo {
-
-  /** Skylark name for the ObjcProtoProvider. */
-  public static final String SKYLARK_NAME = "ObjcProto";
-
-  /** Skylark constructor and identifier for AppleExecutableBinaryProvider. */
-  public static final NativeProvider<ObjcProtoProvider> SKYLARK_CONSTRUCTOR =
-      new NativeProvider<ObjcProtoProvider>(ObjcProtoProvider.class, SKYLARK_NAME) {};
+public class ObjcProtoProvider implements TransitiveInfoProvider {
 
   private final NestedSet<NestedSet<Artifact>> protoGroups;
   private final NestedSet<Artifact> protobufHeaders;
@@ -58,7 +50,6 @@ public class ObjcProtoProvider extends NativeInfo {
       NestedSet<Artifact> portableProtoFilters,
       NestedSet<Artifact> protobufHeaders,
       NestedSet<PathFragment> protobufHeaderSearchPaths) {
-    super(SKYLARK_CONSTRUCTOR);
     this.protoGroups = Preconditions.checkNotNull(protoGroups);
     this.portableProtoFilters = Preconditions.checkNotNull(portableProtoFilters);
     this.protobufHeaders = Preconditions.checkNotNull(protobufHeaders);

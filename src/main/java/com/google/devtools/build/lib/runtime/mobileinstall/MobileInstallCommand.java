@@ -16,11 +16,9 @@ package com.google.devtools.build.lib.runtime.mobileinstall;
 
 import static com.google.devtools.build.lib.analysis.OutputGroupProvider.INTERNAL_SUFFIX;
 
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
@@ -44,8 +42,7 @@ import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
-import com.google.devtools.common.options.OptionPriority.PriorityCategory;
+import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -78,7 +75,7 @@ public class MobileInstallCommand implements BlazeCommand {
     private final String mode;
     private final String aspectName;
 
-    Mode(String mode, String aspectName) {
+    private Mode(String mode, String aspectName) {
       this.mode = mode;
       this.aspectName = aspectName;
     }
@@ -110,8 +107,8 @@ public class MobileInstallCommand implements BlazeCommand {
       name = "split_apks",
       defaultValue = "false",
       category = "mobile-install",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Whether to use split apks to install and update the "
               + "application on the device. Works only with devices with "
@@ -123,9 +120,8 @@ public class MobileInstallCommand implements BlazeCommand {
       name = "incremental",
       category = "mobile-install",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-
-      effectTags = OptionEffectTag.LOADING_AND_ANALYSIS,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Whether to do an incremental install. If true, try to avoid unnecessary additional "
               + "work by reading the state of the device the code is to be installed on and using "
@@ -139,9 +135,8 @@ public class MobileInstallCommand implements BlazeCommand {
       category = "mobile-install",
       defaultValue = "classic",
       converter = ModeConverter.class,
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.EXECUTION},
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Select how to run mobile-install. \"classic\" runs the current version of "
               + "mobile-install. \"skylark\" uses the new skylark version, which has support for "
@@ -156,7 +151,7 @@ public class MobileInstallCommand implements BlazeCommand {
       category = "mobile-install",
       defaultValue = "@android_test_support//tools/android/mobile_install:mobile-install.bzl",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.CHANGES_INPUTS},
+      effectTags = {OptionEffectTag.UNKNOWN},
       help = "The aspect to use for mobile-install."
     )
     public String mobileInstallAspect;
@@ -236,41 +231,24 @@ public class MobileInstallCommand implements BlazeCommand {
         targetToRun.getConfiguration().getBinFragment().getPathString()
             + "/"
             + targetToRun.getLabel().toPathFragment().getPathString()
-            + "_mi/launcher");
+            + "_launcher");
     cmdLine.addAll(runTargetArgs);
 
-    cmdLine.add("--build_id=" + env.getCommandId());
-
-    // Collect relevant common command options
+    // Make mobile-install v2 understand relevant v1 flags for ASwB compatibility.
     CommonCommandOptions commonCommandOptions = options.getOptions(CommonCommandOptions.class);
-    if (!commonCommandOptions.toolTag.isEmpty()) {
-      cmdLine.add("--tool_tag=" + commonCommandOptions.toolTag);
+    if (commonCommandOptions != null && !"".equals(commonCommandOptions.toolTag)) {
+      cmdLine.add("--tool_tag");
+      cmdLine.add(commonCommandOptions.toolTag);
     }
-
-    // Collect relevant adb options
-    cmdLine.add("--start=" + adbOptions.start);
-    if (!adbOptions.adb.isEmpty()) {
-      cmdLine.add("--adb=" + adbOptions.adb);
+    cmdLine.add("--start_type");
+    cmdLine.add(adbOptions.start.toString());
+    if (!"".equals(adbOptions.adb)) {
+      cmdLine.add("--adb_path");
+      cmdLine.add(adbOptions.adb);
     }
     for (String adbArg : adbOptions.adbArgs) {
-      if (!adbArg.isEmpty()) {
-        cmdLine.add("--adb_arg=" + adbArg);
-      }
-    }
-    if (!adbOptions.device.isEmpty()) {
-      cmdLine.add("--device=" + adbOptions.device);
-    }
-
-    // Collect relevant test options
-    TestOptions testOptions = options.getOptions(TestOptions.class);
-    // Default value of testFilter is null.
-    if (!Strings.isNullOrEmpty(testOptions.testFilter)){
-      cmdLine.add("--test_filter=" + testOptions.testFilter);
-    }
-    for (String arg : testOptions.testArguments) {
-      if (!arg.isEmpty()) {
-        cmdLine.add("--test_arg=" + arg);
-      }
+      cmdLine.add("--adb_arg");
+      cmdLine.add(adbArg);
     }
 
     Path workingDir = env.getBlazeWorkspace().getOutputPath().getParentDirectory();
@@ -323,12 +301,12 @@ public class MobileInstallCommand implements BlazeCommand {
                     ? "mobile_install_incremental" + INTERNAL_SUFFIX
                     : "mobile_install_full" + INTERNAL_SUFFIX;
         optionsParser.parse(
-            PriorityCategory.COMMAND_LINE,
+            OptionPriority.COMMAND_LINE,
             "Options required by the mobile-install command",
             ImmutableList.of("--output_groups=" + outputGroup));
       } else {
         optionsParser.parse(
-            PriorityCategory.COMMAND_LINE,
+            OptionPriority.COMMAND_LINE,
             "Options required by the skylark implementation of mobile-install command",
             ImmutableList.of(
                 "--aspects=" + options.mobileInstallAspect + "%" + options.mode.getAspectName(),

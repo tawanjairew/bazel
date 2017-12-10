@@ -4,13 +4,16 @@ package org.checkerframework.dataflow.cfg.node;
 import org.checkerframework.checker.nullness.qual.Nullable;
 */
 
-import com.sun.source.tree.NewArrayTree;
-import com.sun.source.tree.Tree;
+import org.checkerframework.dataflow.util.HashCodeUtils;
+
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+
 import javax.lang.model.type.TypeMirror;
-import org.checkerframework.dataflow.util.HashCodeUtils;
+
+import com.sun.source.tree.NewArrayTree;
+import com.sun.source.tree.Tree;
 
 /**
  * A node for new array creation
@@ -22,21 +25,17 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
  *
  * @author Stefan Heule
  * @author Charlie Garrett
+ *
  */
 public class ArrayCreationNode extends Node {
 
-    /** The tree is null when an array is created for variable arity method calls. */
+    // The tree is null when an array is created for
+    // variable arity method calls.
     protected /*@Nullable*/ NewArrayTree tree;
-    /**
-     * The length of this list is the number of dimensions in the array. Each element is the size of
-     * the given dimension.
-     */
     protected List<Node> dimensions;
-
     protected List<Node> initializers;
 
-    public ArrayCreationNode(
-            /*@Nullable*/ NewArrayTree tree,
+    public ArrayCreationNode(/*@Nullable*/ NewArrayTree tree,
             TypeMirror type,
             List<Node> dimensions,
             List<Node> initializers) {

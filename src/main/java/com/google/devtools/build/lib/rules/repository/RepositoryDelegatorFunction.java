@@ -21,11 +21,10 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleFormatter;
-import com.google.devtools.build.lib.repository.ExternalPackageException;
-import com.google.devtools.build.lib.repository.ExternalPackageUtil;
-import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
+import com.google.devtools.build.lib.rules.ExternalPackageUtil;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -34,7 +33,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -44,7 +42,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
@@ -75,21 +72,17 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   // command is a fetch. Remote repository lookups are only allowed during fetches.
   private final AtomicBoolean isFetch;
 
-  private final BlazeDirectories directories;
+  private Map<String, String> clientEnvironment;
 
-  private final Supplier<Map<String, String>> clientEnvironmentSupplier;
-
-  public RepositoryDelegatorFunction(
-      ImmutableMap<String, RepositoryFunction> handlers,
-      @Nullable RepositoryFunction skylarkHandler,
-      AtomicBoolean isFetch,
-      Supplier<Map<String, String>> clientEnvironmentSupplier,
-      BlazeDirectories directories) {
+  public RepositoryDelegatorFunction(ImmutableMap<String, RepositoryFunction> handlers,
+      @Nullable RepositoryFunction skylarkHandler, AtomicBoolean isFetch) {
     this.handlers = handlers;
     this.skylarkHandler = skylarkHandler;
     this.isFetch = isFetch;
-    this.clientEnvironmentSupplier = clientEnvironmentSupplier;
-    this.directories = directories;
+  }
+
+  public void setClientEnvironment(Map<String, String> clientEnvironment) {
+    this.clientEnvironment = clientEnvironment;
   }
 
   private void setupRepositoryRoot(Path repoRoot) throws RepositoryFunctionException {
@@ -105,6 +98,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws SkyFunctionException, InterruptedException {
     RepositoryName repositoryName = (RepositoryName) skyKey.argument();
+    BlazeDirectories directories = PrecomputedValue.BLAZE_DIRECTORIES.get(env);
     Map<RepositoryName, PathFragment> overrides = REPOSITORY_OVERRIDES.get(env);
     if (env.valuesMissing()) {
       return null;
@@ -120,8 +114,8 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
 
     Rule rule;
     try {
-      rule = getRepository(repositoryName, env);
-    } catch (ExternalRuleNotFoundException e) {
+      rule = ExternalPackageUtil.getRepository(repositoryName, null, env);
+    } catch (ExternalPackageUtil.ExternalRuleNotFoundException e) {
       return RepositoryDirectoryValue.NO_SUCH_REPOSITORY_VALUE;
     }
     if (rule == null) {
@@ -139,7 +133,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
       return RepositoryDirectoryValue.NO_SUCH_REPOSITORY_VALUE;
     }
 
-    handler.setClientEnvironment(clientEnvironmentSupplier.get());
+    handler.setClientEnvironment(clientEnvironment);
 
     byte[] ruleSpecificData = handler.getRuleSpecificMarkerData(rule, env);
     if (ruleSpecificData == null) {
@@ -225,18 +219,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
 
     return RepositoryDirectoryValue.builder().setPath(repoRootValue.realRootedPath().asPath())
         .setFetchingDelayed().build();
-  }
-
-  /**
-   * Uses a remote repository name to fetch the corresponding Rule describing how to get it. This
-   * should be called from {@link SkyFunction#compute} functions, which should return null if this
-   * returns null.
-   */
-  @Nullable
-  private static Rule getRepository(
-      RepositoryName repositoryName, Environment env)
-      throws ExternalPackageException, InterruptedException {
-    return ExternalPackageUtil.getRuleByName(repositoryName.strippedName(), env);
   }
 
   private String computeRuleKey(Rule rule, byte[] ruleSpecificData) {

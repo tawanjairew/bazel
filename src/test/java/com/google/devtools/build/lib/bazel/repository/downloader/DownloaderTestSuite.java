@@ -31,4 +31,4 @@ import org.junit.runners.Suite.SuiteClasses;
   ProxyHelperTest.class,
   RetryingInputStreamTest.class,
 })
-public class DownloaderTestSuite {}
+class DownloaderTestSuite {}

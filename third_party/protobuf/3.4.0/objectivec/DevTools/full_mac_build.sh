@@ -54,7 +54,7 @@ EOF
 header() {
   echo ""
   echo "========================================================================"
-  echo "    $*"
+  echo "    ${@}"
   echo "========================================================================"
 }
 
@@ -206,10 +206,9 @@ else
   wrapped_make -j "${NUM_MAKE_JOBS}" all
   wrapped_make -j "${NUM_MAKE_JOBS}" check
   # Fire off the conformance tests also.
-  (
-  cd conformance || exit
+  cd conformance
   wrapped_make -j "${NUM_MAKE_JOBS}" test_cpp
-  )
+  cd ..
 fi
 
 # Ensure the WKT sources checked in are current.
@@ -332,8 +331,7 @@ fi
 
 if [[ "${DO_OBJC_CONFORMANCE_TESTS}" == "yes" ]] ; then
   header "Running ObjC Conformance Tests"
-  (
-  cd conformance || exit
+  cd conformance
   wrapped_make -j "${NUM_MAKE_JOBS}" test_objc
-  )
+  cd ..
 fi

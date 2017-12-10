@@ -221,7 +221,7 @@ public class SpawnActionTest extends BuildViewTestCase {
                 CustomCommandLine.builder().add("-X").build(),
                 ParamFileInfo.builder(ParameterFileType.UNQUOTED)
                     .setCharset(ISO_8859_1)
-                    .setFlagFormatString("--flagfile=%s")
+                    .setFlag("--flagfile=")
                     .build())
             .build(ActionsTestUtil.NULL_ACTION_OWNER, collectingAnalysisEnvironment, targetConfig);
     collectingAnalysisEnvironment.registerAction(actions);
@@ -413,7 +413,7 @@ public class SpawnActionTest extends BuildViewTestCase {
   @Test
   public void testExtraActionInfo() throws Exception {
     SpawnAction action = createCopyFromWelcomeToDestination(ImmutableMap.<String, String>of());
-    ExtraActionInfo info = action.getExtraActionInfo(actionKeyContext).build();
+    ExtraActionInfo info = action.getExtraActionInfo().build();
     assertThat(info.getMnemonic()).isEqualTo("Dummy");
 
     SpawnInfo spawnInfo = info.getExtension(SpawnInfo.spawnInfo);
@@ -450,11 +450,8 @@ public class SpawnActionTest extends BuildViewTestCase {
         "NONSENSE VARIABLE", "value"
     );
 
-    SpawnInfo spawnInfo =
-        createCopyFromWelcomeToDestination(env)
-            .getExtraActionInfo(actionKeyContext)
-            .build()
-            .getExtension(SpawnInfo.spawnInfo);
+    SpawnInfo spawnInfo = createCopyFromWelcomeToDestination(env).getExtraActionInfo().build()
+        .getExtension(SpawnInfo.spawnInfo);
     assertThat(env).hasSize(spawnInfo.getVariableCount());
     for (EnvironmentVariable variable : spawnInfo.getVariableList()) {
       assertThat(env).containsEntry(variable.getName(), variable.getValue());
@@ -537,8 +534,7 @@ public class SpawnActionTest extends BuildViewTestCase {
             collectingAnalysisEnvironment.registerAction(actions);
             return actions[0];
           }
-        },
-        actionKeyContext);
+        });
   }
 
   @Test
@@ -591,8 +587,7 @@ public class SpawnActionTest extends BuildViewTestCase {
         new EventBus());
 
     Artifact artifact = getOnlyElement(getFilesToBuild(getConfiguredTarget("//a:a")));
-    ExtraActionInfo.Builder extraActionInfo =
-        getGeneratingAction(artifact).getExtraActionInfo(actionKeyContext);
+    ExtraActionInfo.Builder extraActionInfo = getGeneratingAction(artifact).getExtraActionInfo();
     assertThat(extraActionInfo.getAspectName()).isEqualTo("//a:def.bzl%aspect1");
     assertThat(extraActionInfo.getAspectParametersMap())
         .containsExactly(
