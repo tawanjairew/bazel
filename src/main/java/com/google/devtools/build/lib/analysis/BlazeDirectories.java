@@ -18,10 +18,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.FastStringCodec;
 import com.google.devtools.build.lib.skyframe.serialization.PathCodec;
+import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
+import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
@@ -87,14 +87,6 @@ public final class BlazeDirectories {
     String relativeOutputPath = getRelativeOutputPath(productName);
     this.outputPath = execRoot.getRelative(getRelativeOutputPath());
     this.localOutputPath = outputBase.getRelative(relativeOutputPath);
-  }
-
-  /**
-   * Returns the Filesystem that all of our directories belong to. Handy for
-   * resolving absolute paths.
-   */
-  public FileSystem getFileSystem() {
-    return serverDirectories.getFileSystem();
   }
 
   public ServerDirectories getServerDirectories() {
@@ -209,6 +201,10 @@ public final class BlazeDirectories {
     return BlazeDirectories.getRelativeOutputPath(productName);
   }
 
+  public String getProductName() {
+    return productName;
+  }
+
   /**
    * Returns the output directory name, relative to the execRoot.
    * TODO(bazel-team): (2011) make this private?
@@ -239,17 +235,18 @@ public final class BlazeDirectories {
         && this.execRoot.equals(that.execRoot);
   }
 
-  void serialize(CodedOutputStream codedOut, PathCodec pathCodec) throws IOException {
+  void serialize(CodedOutputStream codedOut, PathCodec pathCodec)
+      throws IOException, SerializationException {
     serverDirectories.serialize(codedOut, pathCodec);
     pathCodec.serialize(workspace, codedOut);
-    FastStringCodec.INSTANCE.serialize(productName, codedOut);
+    StringCodecs.asciiOptimized().serialize(productName, codedOut);
   }
 
   static BlazeDirectories deserialize(CodedInputStream codedIn, PathCodec pathCodec)
-      throws IOException {
+      throws IOException, SerializationException {
     return new BlazeDirectories(
         ServerDirectories.deserialize(codedIn, pathCodec),
         pathCodec.deserialize(codedIn),
-        FastStringCodec.INSTANCE.deserialize(codedIn));
+        StringCodecs.asciiOptimized().deserialize(codedIn));
   }
 }

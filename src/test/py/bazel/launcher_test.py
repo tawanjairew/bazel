@@ -84,7 +84,7 @@ class LauncherTest(test_base.TestBase):
                                          launcher_flag)
     if self.IsWindows():
       self.AssertExitCode(exit_code, 1, stderr)
-      self.assertIn('target name extension should match source file extension.',
+      self.assertIn('target name extension should match source file extension',
                     os.linesep.join(stderr))
     else:
       bin3 = os.path.join(bazel_bin, 'foo', 'bin3.bat')
@@ -496,9 +496,7 @@ class LauncherTest(test_base.TestBase):
     self.AssertExitCode(exit_code, 0, stderr)
     self.assertIn('-classpath', stdout)
     classpath = stdout[stdout.index('-classpath') + 1]
-    self.assertIn('foo-classpath.jar', classpath)
-    classpath_jar = os.path.join(bazel_bin, 'foo', 'foo-classpath.jar')
-    self.assertTrue(os.path.exists(classpath_jar))
+    self.assertRegexpMatches(classpath, r'foo-[A-Za-z0-9]+-classpath.jar$')
 
   def AssertRunfilesManifestContains(self, manifest, entry):
     with open(manifest, 'r') as f:

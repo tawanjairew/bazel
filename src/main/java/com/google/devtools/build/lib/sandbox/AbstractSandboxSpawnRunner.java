@@ -22,11 +22,11 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnResult;
+import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnExecException;
-import com.google.devtools.build.lib.exec.SpawnResult;
-import com.google.devtools.build.lib.exec.SpawnResult.Status;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
@@ -60,7 +60,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     this.sandboxOptions = cmdEnv.getOptions().getOptions(SandboxOptions.class);
     this.verboseFailures = cmdEnv.getOptions().getOptions(ExecutionOptions.class).verboseFailures;
     this.inaccessiblePaths =
-        sandboxOptions.getInaccessiblePaths(cmdEnv.getDirectories().getFileSystem());
+        sandboxOptions.getInaccessiblePaths(cmdEnv.getRuntime().getFileSystem());
   }
 
   @Override
@@ -77,6 +77,9 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     }
   }
 
+  // TODO(laszlocsomor): refactor this class to make `actuallyExec`'s contract clearer: the caller
+  // of `actuallyExec` should not depend on `actuallyExec` calling `runSpawn` because it's easy to
+  // forget to do so in `actuallyExec`'s implementations.
   protected abstract SpawnResult actuallyExec(Spawn spawn, SpawnExecutionPolicy policy)
       throws ExecException, InterruptedException, IOException;
 
@@ -85,14 +88,15 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       SandboxedSpawn sandbox,
       SpawnExecutionPolicy policy,
       Path execRoot,
+      Path tmpDir,
       Duration timeout)
-          throws ExecException, IOException, InterruptedException {
+      throws ExecException, IOException, InterruptedException {
     try {
       sandbox.createFileSystem();
       OutErr outErr = policy.getFileOutErr();
       policy.prefetchInputs();
 
-      SpawnResult result = run(sandbox, outErr, timeout);
+      SpawnResult result = run(sandbox, outErr, timeout, tmpDir);
 
       policy.lockOutputFiles();
       try {
@@ -116,8 +120,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
                   originalSpawn.getEnvironment(),
                   execRoot.getPathString()) + SANDBOX_DEBUG_SUGGESTION;
         }
-        throw new SpawnExecException(
-            message, result, /*forciblyRunRemotely=*/false, /*catastrophe=*/false);
+        throw new SpawnExecException(message, result, /*forciblyRunRemotely=*/false);
       }
       return result;
     } finally {
@@ -127,7 +130,8 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     }
   }
 
-  private final SpawnResult run(SandboxedSpawn sandbox, OutErr outErr, Duration timeout)
+  private final SpawnResult run(
+      SandboxedSpawn sandbox, OutErr outErr, Duration timeout, Path tmpDir)
       throws IOException, InterruptedException {
     Command cmd = new Command(
         sandbox.getArguments().toArray(new String[0]),
@@ -135,9 +139,12 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
         sandbox.getSandboxExecRoot().getPathFile());
 
     long startTime = System.currentTimeMillis();
-    CommandResult result;
+    CommandResult commandResult;
     try {
-      result = cmd.execute(outErr.getOutputStream(), outErr.getErrorStream());
+      if (!tmpDir.exists() && !tmpDir.createDirectory()) {
+        throw new IOException(String.format("Could not create temp directory '%s'", tmpDir));
+      }
+      commandResult = cmd.execute(outErr.getOutputStream(), outErr.getErrorStream());
       if (Thread.currentThread().isInterrupted()) {
         throw new InterruptedException();
       }
@@ -145,7 +152,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       if (Thread.currentThread().isInterrupted()) {
         throw new InterruptedException();
       }
-      result = e.getResult();
+      commandResult = e.getResult();
     } catch (CommandException e) {
       // At the time this comment was written, this must be a ExecFailedException encapsulating an
       // IOException from the underlying Subprocess.Factory.
@@ -158,21 +165,28 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
           .build();
     }
 
-    long wallTime = System.currentTimeMillis() - startTime;
+    // TODO(b/62588075): Calculate wall time inside commands instead?
+    Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
     boolean wasTimeout = wasTimeout(timeout, wallTime);
-    Status status = wasTimeout ? Status.TIMEOUT : Status.SUCCESS;
-    int exitCode = status == Status.TIMEOUT
-        ? POSIX_TIMEOUT_EXIT_CODE
-        : result.getTerminationStatus().getRawExitCode();
+    int exitCode =
+        wasTimeout
+            ? POSIX_TIMEOUT_EXIT_CODE
+            : commandResult.getTerminationStatus().getRawExitCode();
+    Status status =
+        wasTimeout
+            ? Status.TIMEOUT
+            : (exitCode == 0) ? Status.SUCCESS : Status.NON_ZERO_EXIT;
     return new SpawnResult.Builder()
         .setStatus(status)
         .setExitCode(exitCode)
-        .setWallTimeMillis(wallTime)
+        .setWallTime(wallTime)
+        .setUserTime(commandResult.getUserExecutionTime())
+        .setSystemTime(commandResult.getSystemExecutionTime())
         .build();
   }
 
-  private boolean wasTimeout(Duration timeout, long wallTimeMillis) {
-    return !timeout.isZero() && wallTimeMillis > timeout.toMillis();
+  private boolean wasTimeout(Duration timeout, Duration wallTime) {
+    return !timeout.isZero() && wallTime.compareTo(timeout) > 0;
   }
 
   /**
@@ -191,8 +205,8 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
    *
    * @throws IOException because we might resolve symlinks, which throws {@link IOException}.
    */
-  protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env)
-      throws IOException {
+  protected ImmutableSet<Path> getWritableDirs(
+      Path sandboxExecRoot, Map<String, String> env, Path tmpDir) throws IOException {
     // We have to make the TEST_TMPDIR directory writable if it is specified.
     ImmutableSet.Builder<Path> writablePaths = ImmutableSet.builder();
     writablePaths.add(sandboxExecRoot);
@@ -208,6 +222,8 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
         writablePaths.add(sandboxExecRoot.getRelative(testTmpDir));
       }
     }
+
+    writablePaths.add(tmpDir);
 
     FileSystem fileSystem = sandboxExecRoot.getFileSystem();
     for (String writablePath : sandboxOptions.sandboxWritablePath) {

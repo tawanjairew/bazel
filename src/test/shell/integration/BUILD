@@ -16,10 +16,10 @@ filegroup(
 
 sh_test(
     name = "progress_reporting_test",
-    size = "medium",
+    size = "large",
     srcs = ["progress_reporting_test.sh"],
     data = [":test-deps"],
-    shard_count = 4,
+    shard_count = 8,
 )
 
 sh_test(
@@ -71,6 +71,7 @@ sh_test(
     ],
     shard_count = 5,
     tags = ["jdk8"],
+    toolchains = ["@bazel_tools//tools/jdk:current_java_runtime"],
 )
 
 sh_test(
@@ -197,12 +198,28 @@ sh_test(
     data = [":test-deps"],
 )
 
+sh_library(
+    name = "discard_graph_edges_lib",
+    testonly = 1,
+    srcs = ["discard_graph_edges_lib.sh"],
+)
+
+sh_test(
+    name = "stamping_test",
+    size = "medium",
+    srcs = ["stamping_test.sh"],
+    data = [":test-deps"],
+)
+
 sh_test(
     name = "discard_graph_edges_test",
     size = "medium",
     srcs = ["discard_graph_edges_test.sh"],
-    data = [":test-deps"],
-    shard_count = 5,
+    data = [
+        ":discard_graph_edges_lib.sh",
+        ":test-deps",
+    ],
+    shard_count = 6,
 )
 
 sh_test(
@@ -259,6 +276,44 @@ sh_test(
     srcs = ["test_test.sh"],
     data = [":test-deps"],
 )
+
+sh_test(
+    name = "outputs_test",
+    size = "medium",
+    srcs = ["outputs_test.sh"],
+    data = [":test-deps"],
+)
+
+sh_test(
+    name = "process_wrapper_test",
+    size = "medium",
+    srcs = ["process-wrapper_test.sh"],
+    data = [
+        ":spend_cpu_time",
+        ":test-deps",
+        "//src/main/protobuf:execution_statistics.proto",
+        "//third_party/protobuf:protoc",
+    ],
+)
+
+package_group(
+    name = "spend_cpu_time_users",
+    packages = [
+        "//src/test/java/com/google/devtools/build/lib/...",
+    ],
+)
+
+cc_binary(
+    name = "spend_cpu_time",
+    testonly = 1,
+    srcs = ["spend_cpu_time.cc"],
+    visibility = [
+        ":spend_cpu_time_users",
+    ],
+)
+
+########################################################################
+# Test suites.
 
 test_suite(
     name = "all_tests",

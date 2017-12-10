@@ -29,9 +29,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.skyframe.serialization.EnumCodec;
-import com.google.devtools.build.lib.skyframe.serialization.FastStringCodec;
 import com.google.devtools.build.lib.skyframe.serialization.LabelCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
+import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
@@ -62,6 +62,18 @@ public class AppleCommandLineOptions extends FragmentOptions {
   )
   // TODO(b/37096178): This flag should be default-on and then be removed.
   public boolean mandatoryMinimumVersion;
+
+  @Option(
+    name = "experimental_objc_provider_from_linked",
+    defaultValue = "true",
+    category = "experimental",
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    effectTags =  { OptionEffectTag.LOSES_INCREMENTAL_STATE, OptionEffectTag.BUILD_FILE_SEMANTICS },
+    help = "Whether Apple rules which control linking should propagate objc provider at the top "
+        + "level"
+  )
+  // TODO(b/32411441): This flag should be default-off and then be removed.
+  public boolean objcProviderFromLinked;
 
   @Option(
     name = "xcode_version",
@@ -319,7 +331,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
    * changed from the default using the {@code xcode_version_config} build flag.
    */
   // TODO(cparsons): Update all callers to reference the actual xcode_version_config flag value.
-  static final String DEFAULT_XCODE_VERSION_CONFIG_LABEL = "//tools/objc:host_xcodes";
+  @VisibleForTesting
+  public static final String DEFAULT_XCODE_VERSION_CONFIG_LABEL = "//tools/objc:host_xcodes";
 
   /** Converter for --default_ios_provisioning_profile. */
   public static class DefaultProvisioningProfileConverter extends DefaultLabelConverter {
@@ -328,17 +341,16 @@ public class AppleCommandLineOptions extends FragmentOptions {
     }
   }
 
+  // TODO(b/68330014): Deprecate and remove this flag.
   @Option(
     name = "xcode_toolchain",
     defaultValue = "null",
     category = "flags",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-    effectTags = {OptionEffectTag.ACTION_OPTIONS},
+    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
     help =
         "The identifier of an Xcode toolchain to use for builds. Currently only the toolchains "
-            + "that ship with Xcode are supported. For example, in addition to the default "
-            + "toolchain Xcode 8 has 'com.apple.dt.toolchain.Swift_2_3' which can be used for "
-            + "building legacy Swift code."
+            + "that ship with Xcode are supported."
   )
   public String xcodeToolchain;
 
@@ -374,6 +386,19 @@ public class AppleCommandLineOptions extends FragmentOptions {
     help = "If true, this target uses the apple crosstool.  Do not set this flag manually."
   )
   public boolean targetUsesAppleCrosstool;
+
+  /**
+   * Returns whether the minimum OS version is explicitly set for the current platform.
+   */
+  public DottedVersion getMinimumOsVersion() {
+    switch (applePlatformType) {
+      case IOS: return iosMinimumOs;
+      case MACOS: return macosMinimumOs;
+      case TVOS: return tvosMinimumOs;
+      case WATCHOS: return watchosMinimumOs;
+      default: throw new IllegalStateException();
+    }
+  }
 
   /**
    * Returns the architecture implied by these options.
@@ -504,7 +529,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
 
   void serialize(CodedOutputStream out) throws IOException, SerializationException {
     out.writeBoolNoTag(mandatoryMinimumVersion);
-    serializeNullable(xcodeVersion, out, FastStringCodec.INSTANCE);
+    out.writeBoolNoTag(objcProviderFromLinked);
+    serializeNullable(xcodeVersion, out, StringCodecs.asciiOptimized());
     serializeNullable(iosSdkVersion, out, DottedVersion.CODEC);
     serializeNullable(watchOsSdkVersion, out, DottedVersion.CODEC);
     serializeNullable(tvOsSdkVersion, out, DottedVersion.CODEC);
@@ -513,10 +539,10 @@ public class AppleCommandLineOptions extends FragmentOptions {
     serializeNullable(watchosMinimumOs, out, DottedVersion.CODEC);
     serializeNullable(tvosMinimumOs, out, DottedVersion.CODEC);
     serializeNullable(macosMinimumOs, out, DottedVersion.CODEC);
-    FastStringCodec.INSTANCE.serialize(iosCpu, out);
+    StringCodecs.asciiOptimized().serialize(iosCpu, out);
     LabelCodec.INSTANCE.serialize(appleCrosstoolTop, out);
     PlatformType.CODEC.serialize(applePlatformType, out);
-    FastStringCodec.INSTANCE.serialize(appleSplitCpu, out);
+    StringCodecs.asciiOptimized().serialize(appleSplitCpu, out);
     ConfigurationDistinguisher.CODEC.serialize(configurationDistinguisher, out);
     STRING_LIST_CODEC.serialize((ImmutableList<String>) iosMultiCpus, out);
     STRING_LIST_CODEC.serialize((ImmutableList<String>) watchosCpus, out);
@@ -524,7 +550,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     STRING_LIST_CODEC.serialize((ImmutableList<String>) macosCpus, out);
     LabelCodec.INSTANCE.serialize(defaultProvisioningProfile, out);
     LabelCodec.INSTANCE.serialize(xcodeVersionConfig, out);
-    serializeNullable(xcodeToolchain, out, FastStringCodec.INSTANCE);
+    serializeNullable(xcodeToolchain, out, StringCodecs.asciiOptimized());
     AppleBitcodeMode.CODEC.serialize(appleBitcodeMode, out);
     out.writeBoolNoTag(enableAppleCrosstoolTransition);
     out.writeBoolNoTag(targetUsesAppleCrosstool);
@@ -534,7 +560,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
       throws IOException, SerializationException {
     AppleCommandLineOptions result = new AppleCommandLineOptions();
     result.mandatoryMinimumVersion = in.readBool();
-    result.xcodeVersion = deserializeNullable(in, FastStringCodec.INSTANCE);
+    result.objcProviderFromLinked = in.readBool();
+    result.xcodeVersion = deserializeNullable(in, StringCodecs.asciiOptimized());
     result.iosSdkVersion = deserializeNullable(in, DottedVersion.CODEC);
     result.watchOsSdkVersion = deserializeNullable(in, DottedVersion.CODEC);
     result.tvOsSdkVersion = deserializeNullable(in, DottedVersion.CODEC);
@@ -543,10 +570,10 @@ public class AppleCommandLineOptions extends FragmentOptions {
     result.watchosMinimumOs = deserializeNullable(in, DottedVersion.CODEC);
     result.tvosMinimumOs = deserializeNullable(in, DottedVersion.CODEC);
     result.macosMinimumOs = deserializeNullable(in, DottedVersion.CODEC);
-    result.iosCpu = FastStringCodec.INSTANCE.deserialize(in);
+    result.iosCpu = StringCodecs.asciiOptimized().deserialize(in);
     result.appleCrosstoolTop = LabelCodec.INSTANCE.deserialize(in);
     result.applePlatformType = PlatformType.CODEC.deserialize(in);
-    result.appleSplitCpu = FastStringCodec.INSTANCE.deserialize(in);
+    result.appleSplitCpu = StringCodecs.asciiOptimized().deserialize(in);
     result.configurationDistinguisher = ConfigurationDistinguisher.CODEC.deserialize(in);
     result.iosMultiCpus = STRING_LIST_CODEC.deserialize(in);
     result.watchosCpus = STRING_LIST_CODEC.deserialize(in);
@@ -554,7 +581,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
     result.macosCpus = STRING_LIST_CODEC.deserialize(in);
     result.defaultProvisioningProfile = LabelCodec.INSTANCE.deserialize(in);
     result.xcodeVersionConfig = LabelCodec.INSTANCE.deserialize(in);
-    result.xcodeToolchain = deserializeNullable(in, FastStringCodec.INSTANCE);
+    result.xcodeToolchain = deserializeNullable(in, StringCodecs.asciiOptimized());
     result.appleBitcodeMode = AppleBitcodeMode.CODEC.deserialize(in);
     result.enableAppleCrosstoolTransition = in.readBool();
     result.targetUsesAppleCrosstool = in.readBool();

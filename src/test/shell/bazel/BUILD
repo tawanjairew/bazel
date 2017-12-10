@@ -47,9 +47,9 @@ filegroup(
     ] + select({
         # TODO(bazel-team): Once https://github.com/bazelbuild/bazel/issues/2241
         # is resolved, use cc implementation of singlejar on windows
-        "//src:windows": ["//src/java_tools/singlejar:SingleJar_deploy.jar"],
-        "//src:windows_msys": ["//src/java_tools/singlejar:SingleJar_deploy.jar"],
-        "//src:windows_msvc": ["//src/java_tools/singlejar:SingleJar_deploy.jar"],
+        "//src/conditions:windows": ["//src/java_tools/singlejar:SingleJar_deploy.jar"],
+        "//src/conditions:windows_msys": ["//src/java_tools/singlejar:SingleJar_deploy.jar"],
+        "//src/conditions:windows_msvc": ["//src/java_tools/singlejar:SingleJar_deploy.jar"],
         "//conditions:default": ["//src/tools/singlejar:singlejar"],
     }),
     visibility = [
@@ -175,15 +175,32 @@ sh_test(
     size = "medium",
     srcs = ["bazel_toolchain_test.sh"],
     data = [":test-deps"] + select({
-        "//src:darwin": [],
-        "//src:darwin_x86_64": [],
-        "//src:windows": [],
-        "//src:windows_msys": [],
-        "//src:windows_msvc": [],
+        "//src/conditions:darwin": [],
+        "//src/conditions:darwin_x86_64": [],
+        "//src/conditions:windows": [],
+        "//src/conditions:windows_msys": [],
+        "//src/conditions:windows_msvc": [],
         "//conditions:default": ["//src/test/shell/bazel/testdata:bazel_toolchain_test_project_pkg"],
     }),
     tags = [
         "requires-network",
+    ],
+)
+
+genquery(
+    name = "embedded_tools_deps",
+    expression = "kind(\"cc_(binary|library)\", deps(//src:embedded_tools_srcs))",
+    scope = ["//src:embedded_tools_srcs"],
+)
+
+sh_test(
+    name = "embedded_tools_deps_test",
+    size = "medium",
+    srcs = ["embedded_tools_deps_test.sh"],
+    data = [
+        ":embedded_tools_deps",
+        ":test-deps",
+        "//src/test/shell/bazel/testdata:embedded_tools_deps_test_data",
     ],
 )
 
@@ -241,6 +258,16 @@ sh_test(
 )
 
 sh_test(
+    name = "skylark_git_repository_test",
+    size = "large",
+    srcs = ["skylark_git_repository_test.sh"],
+    data = [
+        ":test-deps",
+        "//src/test/shell/bazel/testdata:git-repos",
+    ],
+)
+
+sh_test(
     name = "local_repository_test",
     size = "large",
     srcs = ["local_repository_test.sh"],
@@ -280,6 +307,13 @@ sh_test(
 )
 
 sh_test(
+    name = "local_action_cache_test",
+    size = "small",
+    srcs = ["local_action_cache_test.sh"],
+    data = [":test-deps"],
+)
+
+sh_test(
     name = "runfiles_test",
     size = "medium",
     srcs = ["runfiles_test.sh"],
@@ -313,7 +347,6 @@ sh_test(
     srcs = ["maven_skylark_test.sh"],
     data = [
         ":test-deps",
-        "//external:android_ndk_for_testing",
         "//external:android_sdk_for_testing",
         "@m2//:files",
     ],
@@ -324,13 +357,6 @@ sh_test(
     name = "workspace_test",
     size = "large",
     srcs = ["workspace_test.sh"],
-    data = [":test-deps"],
-)
-
-sh_test(
-    name = "process_wrapper_test",
-    size = "medium",
-    srcs = ["process-wrapper_test.sh"],
     data = [":test-deps"],
 )
 
@@ -352,7 +378,10 @@ sh_test(
     name = "bazel_sandboxing_test",
     size = "large",
     srcs = ["bazel_sandboxing_test.sh"],
-    data = [":test-deps"],
+    data = [
+        ":test-deps",
+        "@mount_path_toolchain//file",
+    ],
     tags = ["local"],
 )
 
@@ -387,7 +416,7 @@ sh_test(
     srcs = ["remote_execution_test.sh"],
     data = [
         ":test-deps",
-        "//src/tools/remote_worker",
+        "//src/tools/remote:worker",
     ],
 )
 
@@ -397,7 +426,7 @@ sh_test(
     srcs = ["remote_execution_sandboxing_test.sh"],
     data = [
         ":test-deps",
-        "//src/tools/remote_worker",
+        "//src/tools/remote:worker",
     ],
 )
 
@@ -420,6 +449,7 @@ sh_test(
     size = "large",
     srcs = ["bazel_repository_cache_test.sh"],
     data = [":test-deps"],
+    shard_count = 4,
 )
 
 sh_test(
@@ -495,6 +525,7 @@ sh_test(
     srcs = ["java_launcher_test.sh"],
     args = ["$(JAVABASE)"],
     data = [":test-deps"],
+    toolchains = ["@bazel_tools//tools/jdk:current_java_runtime"],
 )
 
 genquery(

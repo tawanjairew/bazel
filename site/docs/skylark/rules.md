@@ -2,10 +2,11 @@
 layout: documentation
 title: Rules
 ---
+
 # Rules
 
 **Status: Experimental**. We may make breaking changes to the API, but we will
-  help you update your code.
+  announce them.
 
 A rule defines a series of [actions](#actions) that Bazel should perform on
 inputs to get a set of outputs. For example, a C++ binary rule might take a set
@@ -20,6 +21,8 @@ to execute the actions (called _implicit inputs_).
 Before creating or modifying any rule, make sure you are familiar with the
 [extensibility model](concepts.md) (understand the three phases and the
 differences between macros and rules).
+
+<!-- [TOC] -->
 
 ## Rule creation
 
